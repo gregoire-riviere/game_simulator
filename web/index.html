@@ -10,7 +10,7 @@
   </head>
   <body>
     <main class="app-shell">
-      <section class="login-card" aria-labelledby="login-title">
+      <section id="login-screen" class="login-card" aria-labelledby="login-title">
         <p class="eyebrow">Game Simulator</p>
         <h1 id="login-title">Bon retour.</h1>
         <p class="intro">Connectez-vous pour accéder à votre espace de jeu.</p>
@@ -22,6 +22,86 @@
           <button type="submit">Se connecter <span aria-hidden="true">→</span></button>
         </form>
         <p id="auth-status" role="status" aria-live="polite"></p>
+      </section>
+
+      <section id="dashboard" class="app-layout" hidden aria-label="Application Game Simulator">
+        <aside class="side-menu">
+          <div class="menu-header">
+            <div class="menu-brand">
+              <span class="brand-mark" aria-hidden="true">✦</span>
+              <span class="brand-text">Game Simulator</span>
+            </div>
+          </div>
+          <nav id="app-navigation" aria-label="Navigation principale">
+            <p class="nav-section-label">Jeu</p>
+            <button class="nav-link active" type="button" aria-current="page" title="Poker">
+              <span aria-hidden="true">♠</span>
+              <span class="nav-link-text">Poker</span>
+            </button>
+          </nav>
+          <button id="menu-toggle" class="menu-collapse-button" type="button" aria-expanded="true" aria-controls="app-navigation" aria-label="Réduire le menu">
+            <span aria-hidden="true">‹</span>
+          </button>
+        </aside>
+
+        <section class="poker-page" aria-labelledby="poker-title">
+          <header class="poker-header">
+            <div class="page-heading">
+              <p class="eyebrow">Jeu</p>
+              <h1 id="poker-title">Poker</h1>
+              <p class="intro">Préparez une table Texas Hold’em et lancez votre prochaine partie.</p>
+            </div>
+            <p class="user-chip"><span aria-hidden="true">●</span><span id="session-user"></span></p>
+          </header>
+
+          <section class="new-game-card" aria-labelledby="new-game-title">
+            <div class="card-heading">
+              <div>
+                <h2 id="new-game-title">Nouvelle partie</h2>
+                <p>Configurez les paramètres de votre table.</p>
+              </div>
+              <button id="new-game-toggle" class="primary-button" type="button" aria-expanded="false" aria-controls="new-game-form">
+                Nouvelle partie <span aria-hidden="true">→</span>
+              </button>
+            </div>
+
+            <form id="new-game-form" class="game-form" hidden>
+              <div>
+                <label for="players">Joueurs</label>
+                <input id="players" name="players" type="number" min="2" max="9" value="2" required />
+              </div>
+              <div>
+                <label for="stack">Cave initiale</label>
+                <input id="stack" name="stack" type="number" min="1" value="1000" required />
+              </div>
+              <div>
+                <label for="small-blind">Small blind</label>
+                <input id="small-blind" name="small-blind" type="number" min="1" value="5" required />
+              </div>
+              <div>
+                <label for="big-blind">Big blind</label>
+                <input id="big-blind" name="big-blind" type="number" min="1" value="10" required />
+              </div>
+              <button class="primary-button" type="submit">Préparer la table <span aria-hidden="true">→</span></button>
+              <p id="game-setup-status" class="form-status" role="status" aria-live="polite"></p>
+            </form>
+
+            <div id="game-summary" class="game-summary" hidden aria-live="polite">
+              <p class="eyebrow">Table prête</p>
+              <p><strong id="summary-players"></strong> joueurs · cave <strong id="summary-stack"></strong> · blinds <strong id="summary-blinds"></strong></p>
+              <p>La création de la table serveur sera ajoutée dans une prochaine étape.</p>
+            </div>
+          </section>
+
+          <section class="rules-card" aria-labelledby="rules-title">
+            <h2 id="rules-title">Texas Hold’em, en bref</h2>
+            <ul>
+              <li>Chaque joueur reçoit deux cartes privées.</li>
+              <li>Cinq cartes communes sont révélées au flop, turn et river.</li>
+              <li>Vous gagnez si les autres joueurs se couchent ou avec la meilleure main de cinq cartes.</li>
+            </ul>
+          </section>
+        </section>
       </section>
     </main>
     <script src="/js/app.js"></script>
