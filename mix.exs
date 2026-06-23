@@ -14,15 +14,23 @@ defmodule GameSimulator.MixProject do
   # Run "mix help compile.app" to learn about applications.
   def application do
     [
-      extra_applications: [:logger]
+      extra_applications: [:logger],
+      mod: {GameSimulator.Application, []}
     ]
   end
 
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      # {:dep_from_hexpm, "~> 0.3.0"},
-      # {:dep_from_git, git: "https://github.com/elixir-lang/my_dep.git", tag: "0.1.0"}
+      {:llm_composer, "~> 0.19.5"},
+      {:poison, "~> 5.0"},
+      {:plug_cowboy, "~> 2.8"},
+      {:logger_file_backend, "~> 0.0.14"},
+      {:logger_backends, "~> 1.0"},
+      {:dotenvy, "~> 1.1"},
+      {:html_handler,
+       git: "https://github.com/gregoire-riviere/html_handler.git",
+       ref: "3fa137885b3f68915574c1d476d7eedf5e77aadc"}
     ]
   end
 end
