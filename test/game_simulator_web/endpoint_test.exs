@@ -4,14 +4,27 @@ defmodule GameSimulatorWeb.EndpointTest do
   import Plug.Conn
   import Plug.Test
 
-  alias GameSimulatorWeb.{Auth, Endpoint}
+  alias GameSimulatorWeb.{Auth, Endpoint, Users}
 
-  test "returns an authentication contract for login" do
-    conn = conn(:post, "/api/auth/login", %{email: "user@example.com", password: "secret"})
+  test "authenticates a configured user" do
+    user = "test-user-#{System.system_time(:nanosecond)}"
+    assert :ok = Users.add(user, "a-long-test-password")
+
+    conn = conn(:post, "/api/auth/login", %{user: user, password: "a-long-test-password"})
     response = Endpoint.call(conn, Endpoint.init([]))
 
-    assert response.status == 501
-    assert %{"error" => "not_implemented"} = Poison.decode!(response.resp_body)
+    assert response.status == 200
+    assert %{"token" => token, "user" => ^user, "exp" => expiration} = Poison.decode!(response.resp_body)
+    assert is_binary(token)
+    assert is_integer(expiration)
+  end
+
+  test "rejects invalid login credentials" do
+    conn = conn(:post, "/api/auth/login", %{user: "missing", password: "a-long-test-password"})
+    response = Endpoint.call(conn, Endpoint.init([]))
+
+    assert response.status == 401
+    assert %{"error" => "invalid_credentials"} = Poison.decode!(response.resp_body)
   end
 
   test "rejects an authenticated endpoint without a token" do

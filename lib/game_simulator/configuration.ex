@@ -5,7 +5,7 @@ defmodule GameSimulator.Configuration do
 
   @type server :: %{host: String.t(), port: pos_integer()}
   @type logging :: %{directory: String.t(), console_level: Logger.level()}
-  @type auth :: %{data_directory: String.t(), token_ttl_seconds: pos_integer()}
+  @type auth :: %{data_directory: String.t(), users_file: String.t(), token_ttl_seconds: pos_integer()}
 
   @spec server!() :: server()
   def server! do
@@ -45,17 +45,22 @@ defmodule GameSimulator.Configuration do
   def auth! do
     config = Application.fetch_env!(:game_simulator, :auth)
     data_directory = Keyword.fetch!(config, :data_directory)
+    users_file = Keyword.fetch!(config, :users_file)
     token_ttl_seconds = Keyword.fetch!(config, :token_ttl_seconds)
 
     unless is_binary(data_directory) and data_directory != "" do
       raise ArgumentError, "game_simulator auth data directory must be a non-empty string"
     end
 
+    unless is_binary(users_file) and users_file != "" do
+      raise ArgumentError, "game_simulator auth users file must be a non-empty string"
+    end
+
     unless is_integer(token_ttl_seconds) and token_ttl_seconds > 0 do
       raise ArgumentError, "game_simulator token TTL must be greater than zero"
     end
 
-    %{data_directory: data_directory, token_ttl_seconds: token_ttl_seconds}
+    %{data_directory: data_directory, users_file: users_file, token_ttl_seconds: token_ttl_seconds}
   end
 
   @spec http_server?() :: boolean()

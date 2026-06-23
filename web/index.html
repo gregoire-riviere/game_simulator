@@ -4,13 +4,25 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Game Simulator</title>
+    <link rel="icon" type="image/png" href="/img/favicon.png" />
     <link rel="stylesheet" href="/css/app.css" />
+    <link rel="stylesheet" href="/css/mobile.css" media="(max-width: 700px)" />
   </head>
   <body>
     <main class="app-shell">
-      <h1>Game Simulator</h1>
-      <p>Interface cliente prête à développer.</p>
-      <p id="auth-status" role="status">Vérification de la session…</p>
+      <section class="login-card" aria-labelledby="login-title">
+        <p class="eyebrow">Game Simulator</p>
+        <h1 id="login-title">Bon retour.</h1>
+        <p class="intro">Connectez-vous pour accéder à votre espace de jeu.</p>
+        <form id="login-form">
+          <label for="user">Utilisateur</label>
+          <input id="user" name="user" type="text" autocomplete="username" required autofocus />
+          <label for="password">Mot de passe</label>
+          <input id="password" name="password" type="password" autocomplete="current-password" required />
+          <button type="submit">Se connecter <span aria-hidden="true">→</span></button>
+        </form>
+        <p id="auth-status" role="status" aria-live="polite"></p>
+      </section>
     </main>
     <script src="/js/app.js"></script>
   </body>

@@ -56,6 +56,7 @@ outside the release directory. System variables always override file values.
 | `GAME_SIMULATOR_LOG_DIR` | `<project>/log` / temporary test directory | `<release>/log` | Directory containing `info.log` and `debug.log`. Relative paths are resolved from the project or release root. |
 | `GAME_SIMULATOR_LOG_LEVEL` | `debug` | `debug` | Console threshold: `debug`, `info`, `warning`, or `error`. |
 | `GAME_SIMULATOR_DATA_DIR` | `<project>/data` / temporary test directory | `<release>/data` | Persistent token-signing secret directory. Mount or back up this directory in production. |
+| `GAME_SIMULATOR_USERS_FILE` | `<data-dir>/users` | `<data-dir>/users` | Local user file. Use an absolute path or a path relative to the project/release root. Keep it outside the repository and restrict its permissions. |
 | `GAME_SIMULATOR_TOKEN_TTL_SECONDS` | `3600` | `3600` | Signed token lifetime in seconds; must be greater than zero. |
 | `GAME_SIMULATOR_LLM_API_KEY` | unset | unset | Optional LLM key; it is required only by future LLM calls. |
 | `GAME_SIMULATOR_ENV_FILE` | environment-specific default | `<release>/.env` | Optional path to a dotenv file. |
@@ -72,6 +73,7 @@ GAME_SIMULATOR_PORT=4000
 GAME_SIMULATOR_LOG_DIR=log
 GAME_SIMULATOR_LOG_LEVEL=debug
 GAME_SIMULATOR_DATA_DIR=data
+GAME_SIMULATOR_USERS_FILE=data/users
 GAME_SIMULATOR_TOKEN_TTL_SECONDS=3600
 GAME_SIMULATOR_LLM_API_KEY=replace-with-your-key
 ```
@@ -89,12 +91,25 @@ of [`gregoire-riviere/html_handler`](https://github.com/gregoire-riviere/html_ha
 It compiles the static interface in `web/` and serves it through Cowboy. SSR is
 not enabled.
 
-The following JSON routes are reserved for the authentication provider:
+The browser interface is available at `/` when `GAME_SIMULATOR_HOST` and
+`GAME_SIMULATOR_PORT` are configured. Create its first user from IEx; passwords
+must contain at least 12 characters. The function hashes the password with
+PBKDF2-HMAC-SHA256 and appends only the username, parameters, salt, and hash to
+the configured `GAME_SIMULATOR_USERS_FILE`.
+
+```sh
+mix run -e 'IO.inspect(GameSimulatorWeb.Users.add("admin", "a-long-unique-password"))'
+```
+
+Do not commit this file or expose it through the web server. Use a separate
+secret manager or user provider when local file management is no longer suitable.
+
+The following JSON routes are available:
 
 | Route | Current behavior |
 | --- | --- |
 | `POST /api/auth/register` | Returns `501 not_implemented`. |
-| `POST /api/auth/login` | Returns `501 not_implemented`. |
+| `POST /api/auth/login` | Accepts JSON `{ "user", "password" }` and returns a signed token on success. |
 | `POST /api/auth/refresh` | Returns `501 not_implemented`. |
 | `POST /api/auth/logout` | Returns `501 not_implemented`. |
 | `GET /api/auth/me` | Requires `Authorization: Bearer <token>` and returns the token subject and expiration. |

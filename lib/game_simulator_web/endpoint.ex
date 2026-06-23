@@ -8,7 +8,7 @@ defmodule GameSimulatorWeb.Endpoint do
 
   use Plug.Router
 
-  alias GameSimulatorWeb.Auth
+  alias GameSimulatorWeb.{Auth, Users}
 
   plug(Plug.Logger)
 
@@ -26,7 +26,16 @@ defmodule GameSimulatorWeb.Endpoint do
   end
 
   post "/api/auth/login" do
-    not_implemented(conn, "login")
+    user = conn.body_params["user"]
+    password = conn.body_params["password"]
+
+    with {:ok, user} <- Users.authenticate(user, password),
+         {:ok, token, expiration} <- Auth.issue_token(user) do
+      send_json(conn, 200, %{token: token, user: user, exp: expiration})
+    else
+      {:error, :invalid_credentials} -> send_json(conn, 401, %{error: "invalid_credentials"})
+      {:error, _reason} -> send_json(conn, 500, %{error: "authentication_unavailable"})
+    end
   end
 
   post "/api/auth/refresh" do

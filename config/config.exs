@@ -10,7 +10,7 @@ config :html_handler,
     html: "web",
     css: "web/assets/css",
     js: "web/assets/js",
-    dir_to_copy: [],
+    dir_to_copy: ["web/assets/img"],
     output: "priv/static"
   },
   templatization?: false,

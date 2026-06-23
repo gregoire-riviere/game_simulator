@@ -66,6 +66,12 @@ data_dir = env!("GAME_SIMULATOR_DATA_DIR", :string!, default_data_dir)
 data_dir =
   if Path.type(data_dir) == :relative, do: Path.expand(data_dir, release_root), else: data_dir
 
+default_users_file = Path.join(data_dir, "users")
+users_file = env!("GAME_SIMULATOR_USERS_FILE", :string!, default_users_file)
+
+users_file =
+  if Path.type(users_file) == :relative, do: Path.expand(users_file, release_root), else: users_file
+
 token_ttl_seconds = env!("GAME_SIMULATOR_TOKEN_TTL_SECONDS", :integer, 3600)
 
 unless token_ttl_seconds > 0 do
@@ -76,7 +82,7 @@ end
 config :game_simulator,
   server: [host: host, port: port],
   logging: [directory: log_dir, console_level: console_log_level],
-  auth: [data_directory: data_dir, token_ttl_seconds: token_ttl_seconds],
+  auth: [data_directory: data_dir, users_file: users_file, token_ttl_seconds: token_ttl_seconds],
   llm: [api_key: env!("GAME_SIMULATOR_LLM_API_KEY", :string, nil)]
 
 # Keep the primary logger at :debug so debug.log always contains every event.
