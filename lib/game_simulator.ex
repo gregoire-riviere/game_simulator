@@ -1,6 +1,6 @@
 defmodule GameSimulator do
   @moduledoc """
-  Documentation for `GameSimulator`.
+  Point d'entrée documentaire de l'application Game Simulator.
   """
 
   @doc """

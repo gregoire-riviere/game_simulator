@@ -1,4 +1,11 @@
 defmodule Poker.Game do
+  @moduledoc """
+  Arbitre d'une table de Texas Hold'em.
+
+  Il applique exclusivement les règles : tours, montants légaux, cartes, pots et
+  règlement. Les profils et décisions des PNJ vivent volontairement ailleurs.
+  """
+
   use GenServer
 
   def start_link(options) do
@@ -147,6 +154,7 @@ defmodule Poker.Game do
   end
 
   def begin_hand(state) do
+    # Seuls les joueurs ayant des jetons peuvent recevoir des cartes pour cette main.
     ids =
       state.players
       |> Map.values()
@@ -208,6 +216,7 @@ defmodule Poker.Game do
   end
 
   def actions_for(state, id) do
+    # Le montant à suivre est la différence entre la mise la plus haute et celle du joueur.
     player = Map.fetch!(state.players, id)
     to_call = state.current_bet - Map.fetch!(state.street_contributions, id)
     base = [:fold, :all_in]
@@ -262,6 +271,7 @@ defmodule Poker.Game do
     player = Map.fetch!(state.players, id)
     previous = Map.fetch!(state.street_contributions, id)
     amount = total - previous
+    # Une relance doit augmenter la mise précédente d'au moins `min_raise`, sauf tapis.
     raise_size = total - state.current_bet
 
     cond do

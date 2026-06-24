@@ -24,6 +24,7 @@
         <p id="auth-status" role="status" aria-live="polite"></p>
       </section>
 
+      <!-- L'espace jeu reste caché tant que l'authentification n'a pas réussi. -->
       <section id="dashboard" class="app-layout" hidden aria-label="Application Game Simulator">
         <aside class="side-menu">
           <div class="menu-header">
@@ -69,6 +70,7 @@
             </div>
           </section>
 
+          <!-- La table est alimentée uniquement par le snapshot public du serveur. -->
           <section id="table-screen" class="table-screen" hidden aria-label="Table de poker">
             <div class="table-toolbar">
               <p id="table-status" class="form-status" role="status" aria-live="polite"></p>

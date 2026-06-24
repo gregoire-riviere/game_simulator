@@ -1,5 +1,7 @@
 defmodule GameSimulator.Application do
-  @moduledoc false
+  @moduledoc """
+  Démarre les services partagés : logs, registre des tables et serveur HTTP.
+  """
   use Application
 
   @impl true
@@ -17,6 +19,7 @@ defmodule GameSimulator.Application do
   end
 
   def children do
+    # Le registre retrouve une table par utilisateur ; le superviseur isole chaque session.
     table_children = [
       {Registry, keys: :unique, name: GameSimulator.TableRegistry},
       {DynamicSupervisor, strategy: :one_for_one, name: GameSimulator.TableSupervisor}

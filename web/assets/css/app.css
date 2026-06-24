@@ -1,3 +1,4 @@
+/* Base visuelle commune à l'authentification, au tableau de bord et à la table. */
 :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
 * { box-sizing: border-box; }
 html, body { width: 100%; min-width: 0; }
@@ -63,6 +64,7 @@ button:disabled { cursor: wait; opacity: .65; }
 .game-summary strong { color: #f8fafc; }
 .rules-card ul { margin: 1rem 0 0; padding-left: 1.25rem; color: #aab4ca; line-height: 1.7; }
 
+/* La table est une ellipse décorative ; les sièges restent dans sa zone intérieure sûre. */
 .table-screen { margin-top: 2rem; }
 .table-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
 .table-toolbar .form-status { margin: 0; }
@@ -87,6 +89,7 @@ button:disabled { cursor: wait; opacity: .65; }
 .seat-4 { bottom: 7%; left: 50%; transform: translateX(-50%); }
 .seat-5 { bottom: 22%; left: 9%; }
 .seat-6 { top: 22%; left: 9%; }
+/* Les boutons sont créés dynamiquement selon les actions légales du moteur. */
 .action-panel { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; min-height: 4.5rem; margin-top: 1rem; padding: 1rem; border: 1px solid #ffffff1f; border-radius: .8rem; background: #151b2dd9; color: #aab4ca; }
 .hand-result { margin-top: 1rem; padding: 1.25rem; border: 1px solid #86efac66; border-radius: .8rem; background: #86efac12; }
 .hand-result > p:not(.eyebrow) { margin: .45rem 0 0; color: #bbf7d0; }

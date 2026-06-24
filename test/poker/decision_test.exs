@@ -26,4 +26,33 @@ defmodule Poker.DecisionTest do
 
     assert Poker.Decision.sizing(%{min: 2, max: 1_000}, profile, context, :bet) <= 150
   end
+
+  test "detects the main drawing situations" do
+    assert Poker.Decision.draw_category([{"A", "hearts"}, {"K", "hearts"}], [{"7", "hearts"}, {"2", "hearts"}, {"9", "clubs"}]) == :flush_draw
+    assert Poker.Decision.draw_category([{"8", "clubs"}, {"9", "hearts"}], [{"10", "spades"}, {"J", "diamonds"}, {"2", "clubs"}]) == :open_ended
+    assert Poker.Decision.draw_category([{"8", "clubs"}, {"10", "hearts"}], [{"J", "spades"}, {"Q", "diamonds"}, {"3", "clubs"}]) == :gutshot
+    assert Poker.Decision.draw_category([{"A", "hearts"}, {"K", "hearts"}], [{"Q", "hearts"}, {"J", "hearts"}, {"2", "clubs"}]) == :combo_draw
+  end
+
+  test "returns only legal postflop action types across weighted draws" do
+    profile = Poker.Profile.new(1)
+
+    context = %{
+      phase: :flop,
+      cards: [{"A", "hearts"}, {"K", "hearts"}],
+      board: [{"Q", "hearts"}, {"J", "hearts"}, {"2", "clubs"}],
+      pot: 12,
+      current_bet: 0,
+      to_call: 0,
+      facing_cbet: false,
+      actions: [:check, %{bet: %{min: 2, max: 100}}]
+    }
+
+    Enum.each(1..50, fn _attempt ->
+      case Poker.Decision.decide(profile, context) do
+        :check -> assert true
+        {:bet, amount} -> assert amount in 2..18
+      end
+    end)
+  end
 end

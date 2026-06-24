@@ -1,4 +1,11 @@
 defmodule Poker do
+  @moduledoc """
+  Règles pures du poker : paquet, valeur des mains et répartition des pots.
+
+  Ce module ne gère ni joueurs connectés ni stratégie des PNJ. Il peut donc être
+  testé seul : une même entrée produit toujours le même gagnant et les mêmes gains.
+  """
+
   @ranks ["2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A"] # Rangs standards, du plus faible au plus fort.
   @suits ["clubs", "diamonds", "hearts", "spades"] # Couleurs standards du paquet.
 
@@ -101,6 +108,7 @@ defmodule Poker do
   end
 
   def settle(players, board, odd_chip_order) do
+    # Un joueur couché a contribué au pot mais ne peut jamais le remporter.
     eligible = Enum.reject(players, & &1.folded)
 
     case eligible do

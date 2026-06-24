@@ -11,6 +11,7 @@ defmodule GameSimulatorWeb.Users do
 
   @spec add(String.t(), String.t()) :: :ok | {:error, atom()}
   def add(user, password) do
+    # Le fichier ne contient jamais le mot de passe : seulement son hash salé PBKDF2.
     %{users_file: users_file} = Configuration.auth!()
 
     with :ok <- validate(user, password),
@@ -87,7 +88,7 @@ defmodule GameSimulatorWeb.Users do
         with {parsed_iterations, ""} when parsed_iterations == @iterations <- Integer.parse(iterations),
              {:ok, salt} <- Base.decode64(salt),
              {:ok, expected_hash} <- Base.decode64(hash) do
-          # Only accept the cost written by `add/2` to prevent a malformed file from exhausting CPU.
+          # Le coût est borné à celui de `add/2` pour empêcher un fichier malformé d'épuiser le CPU.
           actual_hash =
             :crypto.pbkdf2_hmac(:sha256, password, salt, parsed_iterations, byte_size(expected_hash))
 

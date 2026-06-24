@@ -26,6 +26,7 @@ defmodule GameSimulatorWeb.Endpoint do
   end
 
   post "/api/auth/login" do
+    # Le mot de passe n'est jamais transformé en token avant authentification locale.
     user = conn.body_params["user"]
     password = conn.body_params["password"]
 
@@ -43,6 +44,7 @@ defmodule GameSimulatorWeb.Endpoint do
   end
 
   post "/api/auth/logout" do
+    # Le token est stateless : le navigateur le supprime après cette réponse sans contenu.
     Plug.Conn.send_resp(conn, 204, "")
   end
 
@@ -57,6 +59,7 @@ defmodule GameSimulatorWeb.Endpoint do
   end
 
   post "/api/table" do
+    # Une seule table temporaire est associée à chaque utilisateur authentifié.
     authenticated(conn, fn conn, user ->
       with {:ok, table} <- GameSimulator.Tables.start(user),
            {:ok, state} <- GameSimulator.Table.state(table, user) do
@@ -82,6 +85,7 @@ defmodule GameSimulatorWeb.Endpoint do
   end
 
   post "/api/table/action" do
+    # Les montants bruts du navigateur sont toujours revalidés par `Poker.Game`.
     authenticated(conn, fn conn, user ->
       with {:ok, table} <- table_for(user),
            {:ok, action} <- parse_action(conn.body_params),
@@ -154,6 +158,7 @@ defmodule GameSimulatorWeb.Endpoint do
   end
 
   def authenticated(conn, fun) do
+    # Aucun endpoint de table ne fait confiance à un identifiant fourni par le navigateur.
     conn = Auth.verify(conn)
     if conn.halted, do: conn, else: fun.(conn, conn.assigns.token_user)
   end

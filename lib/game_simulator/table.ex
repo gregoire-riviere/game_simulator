@@ -1,4 +1,11 @@
 defmodule GameSimulator.Table do
+  @moduledoc """
+  Session temporaire d'un utilisateur : une table, son héros et cinq PNJ.
+
+  Cette couche coordonne le moteur, les profils et l'API. Elle ne réimplémente
+  jamais les règles de poker, qui restent dans `Poker.Game`.
+  """
+
   use GenServer
 
   def start_link(options) do
@@ -13,6 +20,7 @@ defmodule GameSimulator.Table do
 
   @impl true
   def init(options) do
+    # La table V1 est toujours 6-max : le héros reçoit le siège 6, les PNJ les autres.
     owner = Keyword.fetch!(options, :owner)
     provider = Keyword.get(options, :profile_provider, Poker.LocalProfileProvider)
     {:ok, game} = Poker.Game.start_link(small_blind: 1, big_blind: 2)
@@ -50,6 +58,7 @@ defmodule GameSimulator.Table do
   end
 
   def handle_call({:advance_bot, owner}, _from, state) do
+    # Le navigateur demande une seule action PNJ ; cela permet de la voir à l'écran.
     with :ok <- owner?(state, owner),
          {:ok, %{player_id: id}} <- Poker.Game.next_action(state.game),
          true <- bot?(id),
@@ -68,6 +77,7 @@ defmodule GameSimulator.Table do
 
   def handle_call({:next_hand, owner}, _from, state) do
     with :ok <- owner?(state, owner),
+         :ok <- hero_has_chips(state),
          {:ok, _snapshot} <- Poker.Game.start_hand(state.game) do
       reply(%{state | actions: []}, owner)
     else
@@ -81,6 +91,12 @@ defmodule GameSimulator.Table do
   def bot?({:bot, _seat}), do: true
   def bot?(_id), do: false
 
+  def hero_has_chips(state) do
+    # Une cave vide ne peut pas entrer dans une nouvelle main ; le recave viendra plus tard.
+    {:ok, snapshot} = Poker.Game.public_state(state.game, state.human_id)
+    if snapshot.players[state.human_id].stack > 0, do: :ok, else: {:error, :hero_busted}
+  end
+
   def record_action(state, id, action) do
     action = %{player: player_name(state, id), action: action_name(action)}
     %{state | actions: Enum.take([action | state.actions], 8)}
@@ -91,6 +107,7 @@ defmodule GameSimulator.Table do
   def action_name(action), do: Atom.to_string(action)
 
   def update_profiles(state, %{phase: :waiting}) do
+    # Le tilt est mis à jour seulement après le règlement complet de la main.
     [hand | _history] = Poker.Game.history(state.game, 1) |> elem(1)
 
     profiles =

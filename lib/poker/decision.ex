@@ -1,4 +1,11 @@
 defmodule Poker.Decision do
+  @moduledoc """
+  Décisions probabilistes des PNJ.
+
+  Le module reçoit un profil et un contexte sans cartes adverses. Il ne modifie pas
+  la table : l'action retournée est ensuite validée par `Poker.Game`.
+  """
+
   def decide(profile, context) do
     case context.phase do
       :preflop -> preflop(profile, context)
@@ -7,6 +14,7 @@ defmodule Poker.Decision do
   end
 
   def preflop(profile, context) do
+    # Préflop : aucune carte commune, la décision dépend surtout de la range et position.
     facing_open = context.current_bet > context.big_blind
     tilt = tilt_effect(profile)
     vpip = effective_rate(profile.vpip, context.position)
@@ -25,18 +33,126 @@ defmodule Poker.Decision do
 
   def postflop(profile, context) do
     category = hand_category(context.cards ++ context.board)
-    aggressive = profile.aggression + tilt_effect(profile)
+    draw = draw_category(context.cards, context.board)
+
+    # On part d'un comportement neutre, puis le profil et le tilt le déforment.
+    probabilities = base_postflop_probabilities(category, draw, context)
+    probabilities = apply_profile_biases(probabilities, profile, category, draw, context)
+    probabilities = apply_tilt(probabilities, profile)
+    probabilities |> normalize_probabilities() |> weighted_random() |> postflop_action(profile, context)
+  end
+
+  def base_postflop_probabilities(category, draw, %{to_call: 0}) do
+    case {category, draw} do
+      {:nuts, _draw} -> %{bet: 0.80, check: 0.20}
+      {:very_strong, _draw} -> %{bet: 0.75, check: 0.25}
+      {:strong, _draw} -> %{bet: 0.60, check: 0.40}
+      {:medium, _draw} -> %{bet: 0.30, check: 0.70}
+      {:air, :none} -> %{bet: 0.10, check: 0.90}
+      {:air, _draw} -> %{bet: 0.35, check: 0.65}
+    end
+  end
+
+  def base_postflop_probabilities(category, draw, _context) do
+    case {category, draw} do
+      {:nuts, _draw} -> %{raise: 0.45, call: 0.50, fold: 0.05}
+      {:very_strong, _draw} -> %{raise: 0.35, call: 0.60, fold: 0.05}
+      {:strong, _draw} -> %{raise: 0.15, call: 0.70, fold: 0.15}
+      {:medium, :none} -> %{raise: 0.0, call: 0.45, fold: 0.55}
+      {:medium, _draw} -> %{raise: 0.10, call: 0.55, fold: 0.35}
+      {:air, :none} -> %{raise: 0.05, call: 0.05, fold: 0.90}
+      {:air, _draw} -> %{raise: 0.10, call: 0.55, fold: 0.35}
+    end
+  end
+
+  def apply_profile_biases(probabilities, profile, category, draw, context) do
+    probabilities = scale_probability(probabilities, :bet, 0.5 + profile.aggression)
+    probabilities = scale_probability(probabilities, :raise, 0.5 + profile.aggression)
+    probabilities = if category == :air, do: scale_probability(probabilities, :bet, 1 + profile.bluff), else: probabilities
+    probabilities = if category == :air, do: scale_probability(probabilities, :raise, 1 + profile.bluff), else: probabilities
+    probabilities = if profile.call_too_wide, do: scale_probability(probabilities, :call, 1.4) |> scale_probability(:fold, 0.7), else: probabilities
+    probabilities = if profile.overplays_top_pair and category == :strong, do: scale_probability(probabilities, :raise, 1.5) |> scale_probability(:fold, 0.5), else: probabilities
+    probabilities = if profile.chases_draws and draw != :none, do: scale_probability(probabilities, :call, 1.5) |> scale_probability(:fold, 0.6), else: probabilities
+    probabilities = if context.facing_cbet and category in [:medium, :air], do: scale_probability(probabilities, :fold, 1 + profile.fold_to_cbet), else: probabilities
+
+    # À la river il n'y a plus de carte à venir : la curiosité représente un call faible pour voir.
+    if context.phase == :river and context.to_call > 0 do
+      probabilities |> scale_probability(:call, 1 + profile.showdown_curiosity * 0.3) |> scale_probability(:fold, 1 - profile.showdown_curiosity * 0.25)
+    else
+      probabilities
+    end
+  end
+
+  def apply_tilt(probabilities, profile) do
+    tilt = tilt_effect(profile)
+
+    probabilities
+    |> scale_probability(:bet, 1 + tilt)
+    |> scale_probability(:raise, 1 + tilt)
+    |> scale_probability(:fold, max(0.3, 1 - tilt))
+  end
+
+  def scale_probability(probabilities, action, factor) do
+    Map.update(probabilities, action, 0.0, &(&1 * factor))
+  end
+
+  def normalize_probabilities(probabilities) do
+    total = probabilities |> Map.values() |> Enum.sum()
+    Map.new(probabilities, fn {action, probability} -> {action, probability / total} end)
+  end
+
+  def weighted_random(probabilities) do
+    target = :rand.uniform()
+
+    probabilities
+    |> Enum.sort_by(&elem(&1, 0))
+    |> Enum.reduce_while(0.0, fn {action, probability}, total ->
+      total = total + probability
+      if target <= total, do: {:halt, action}, else: {:cont, total}
+    end)
+  end
+
+  def postflop_action(:bet, profile, context), do: bet(profile, context)
+  def postflop_action(:raise, profile, context), do: raise_action(profile, context)
+  def postflop_action(:call, _profile, _context), do: :call
+  def postflop_action(:fold, _profile, _context), do: :fold
+  def postflop_action(:check, _profile, _context), do: :check
+
+  def draw_category(hole_cards, board) do
+    flush_draw = flush_draw?(hole_cards, board)
+    straight_draw = straight_draw(hole_cards ++ board)
 
     cond do
-      context.to_call == 0 and category in [:nuts, :very_strong] and chance(aggressive) -> bet(profile, context)
-      context.to_call == 0 and category == :strong and chance(aggressive * 0.7) -> bet(profile, context)
-      context.to_call == 0 and category == :air and chance(profile.bluff + tilt_effect(profile)) -> bet(profile, context)
-      context.to_call > 0 and category in [:nuts, :very_strong] and chance(aggressive * 0.6) -> raise_action(profile, context)
-      context.to_call > 0 and category in [:nuts, :very_strong, :strong] -> call_or_fold(profile, context, 0.85)
-      context.to_call > 0 and category == :medium and context.facing_cbet and chance(profile.fold_to_cbet) -> fold_or_check(context)
-      context.to_call > 0 and category == :medium -> call_or_fold(profile, context, call_chance(profile, context))
-      context.to_call > 0 and profile.call_too_wide and chance(0.22 + tilt_effect(profile)) -> call_or_fold(profile, context, 0.75)
-      true -> fold_or_check(context)
+      flush_draw and straight_draw != :none -> :combo_draw
+      flush_draw -> :flush_draw
+      true -> straight_draw
+    end
+  end
+
+  def flush_draw?(hole_cards, board) do
+    # Un tirage couleur exige quatre cartes de la même couleur, dont une carte privée.
+    suits = hole_cards ++ board |> Enum.map(&elem(&1, 1))
+    hole_suits = Enum.map(hole_cards, &elem(&1, 1))
+    Enum.any?(hole_suits, fn suit -> Enum.count(suits, &(&1 == suit)) == 4 end)
+  end
+
+  def straight_draw(cards) do
+    values = cards |> Enum.map(fn {rank, _suit} -> Poker.rank_value(rank) end) |> Enum.uniq()
+    values = if 14 in values, do: [1 | values], else: values
+
+    missing_ranks =
+      5..14
+      |> Enum.flat_map(fn high ->
+        sequence = if high == 5, do: [1, 2, 3, 4, 5], else: Enum.to_list((high - 4)..high)
+        missing = sequence -- values
+        if length(missing) == 1 and length(sequence -- missing) == 4, do: missing, else: []
+      end)
+      |> Enum.uniq()
+
+    cond do
+      length(missing_ranks) >= 2 -> :open_ended
+      length(missing_ranks) == 1 -> :gutshot
+      true -> :none
     end
   end
 
@@ -52,6 +168,8 @@ defmodule Poker.Decision do
   def position_factor(:big_blind), do: 1.10
 
   def in_top_percent?(hand, percent) do
+    # Les 169 catégories de mains n'ont pas le même nombre de combinaisons : AA en a 6,
+    # AK assorti 4 et AK dépareillé 12. Le pourcentage est donc compté sur les 1 326 combos.
     target = round(1_326 * min(max(percent, 0), 100) / 100)
     normalized = normalize_hand(hand)
 
@@ -115,6 +233,7 @@ defmodule Poker.Decision do
   end
 
   def hand_category(cards) do
+    # Cette classe volontairement grossière suffit pour choisir des fréquences V1.
     case Poker.best_hand(cards) do
       {value, _, _, _, _, _} when value >= 6 -> :nuts
       {value, _, _, _, _, _} when value >= 3 -> :very_strong
@@ -123,12 +242,6 @@ defmodule Poker.Decision do
       {1, _, _, _, _, _} -> :medium
       _other -> :air
     end
-  end
-
-  def call_chance(profile, context) do
-    # Les pot odds réduisent les calls faibles face à une grosse mise.
-    pot_odds = context.to_call / max(context.pot + context.to_call, 1)
-    max(0.1, 0.65 - pot_odds + if(profile.chases_draws, do: 0.12, else: 0))
   end
 
   def tilt_effect(profile) do

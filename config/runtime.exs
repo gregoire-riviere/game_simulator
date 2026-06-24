@@ -1,6 +1,7 @@
 import Config
 import Dotenvy
 
+# Les variables système priment sur le fichier dotenv, pour les déploiements et secrets.
 environment = config_env()
 release_root = System.get_env("RELEASE_ROOT") || File.cwd!()
 

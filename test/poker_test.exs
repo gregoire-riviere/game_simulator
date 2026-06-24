@@ -38,6 +38,19 @@ defmodule PokerTest do
     assert Poker.settle(players, board, [:short, :deep, :folded]) == %{short: 30, deep: 20}
   end
 
+  test "limits a short stack winner to the main pot" do
+    players = [
+      %{id: :short, cards: [{"A", "spades"}, {"A", "hearts"}], contribution: 20, folded: false},
+      %{id: :middle, cards: [{"K", "spades"}, {"K", "hearts"}], contribution: 70, folded: false},
+      %{id: :deep, cards: [{"Q", "spades"}, {"Q", "hearts"}], contribution: 70, folded: false}
+    ]
+
+    board = [{"2", "clubs"}, {"3", "diamonds"}, {"7", "hearts"}, {"9", "clubs"}, {"J", "diamonds"}]
+
+    # A gagne seulement 20 × 3 ; B gagne le side pot de 50 × 2.
+    assert Poker.settle(players, board, [:short, :middle, :deep]) == %{short: 60, middle: 100}
+  end
+
   test "awards the full pot directly when every opponent folded" do
     players = [
       %{id: :winner, cards: [{"A", "spades"}, {"A", "hearts"}], contribution: 10, folded: false},

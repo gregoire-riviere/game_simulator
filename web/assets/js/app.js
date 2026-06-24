@@ -1,3 +1,4 @@
+// Le token ne vit que dans l'onglet courant : fermer le navigateur déconnecte l'utilisateur.
 const tokenKey = "game-simulator-token";
 const appShell = document.querySelector(".app-shell");
 const loginScreen = document.getElementById("login-screen");
@@ -45,6 +46,7 @@ function money(cents) {
 }
 
 async function api(path, options = {}) {
+  // Tous les appels de jeu portent le token ; le serveur reste l'autorité sur les actions.
   const response = await fetch(path, {
     ...options,
     headers: { "content-type": "application/json", authorization: `Bearer ${sessionStorage.getItem(tokenKey)}`, ...(options.headers || {}) }
@@ -91,6 +93,7 @@ function card(value) {
 }
 
 function renderPlayers(players) {
+  // Les cartes des PNJ restent la chaîne "hidden" jusqu'au règlement de la main.
   pokerTable.querySelectorAll(".seat").forEach((seat) => seat.remove());
 
   players.forEach((player) => {
@@ -122,6 +125,7 @@ function actionButton(label, action, disabled = false) {
 }
 
 function renderActions() {
+  // Les contrôles sont construits depuis les actions légales envoyées par le moteur.
   actionPanel.replaceChildren();
 
   if (table.hand_finished) {
@@ -156,6 +160,7 @@ function renderActions() {
 }
 
 function renderResult() {
+  // Le résultat ne s'affiche qu'une fois la main terminée, jamais pendant le coup.
   const result = table.hand_finished ? table.last_result : null;
   handResult.hidden = !result;
   if (!result) return;
@@ -203,6 +208,7 @@ function renderTable(nextTable) {
   }));
 
   if (!table.hand_finished && !table.hero_turn) {
+    // Une requête ne fait jouer qu'un PNJ pour rendre la séquence lisible.
     botTimer = setTimeout(() => advanceBot(), 700);
   }
 }
@@ -226,8 +232,8 @@ async function advanceBot() {
 async function nextHand() {
   try {
     renderTable(await api("/api/table/next-hand", { method: "POST", body: "{}" }));
-  } catch (_error) {
-    tableStatus.textContent = "Impossible de démarrer la main suivante.";
+  } catch (error) {
+    tableStatus.textContent = error.message === "hero_busted" ? "Vous n’avez plus de jetons : quittez la table pour recommencer." : "Impossible de démarrer la main suivante.";
   }
 }
 

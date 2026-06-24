@@ -21,4 +21,15 @@ defmodule GameSimulator.TableTest do
     assert length(advanced.recent_actions) == 1
     assert {:error, :forbidden} = GameSimulator.Table.advance_bot(table, "mallory")
   end
+
+  test "does not start a new hand when the hero has no chips" do
+    {:ok, table} = GameSimulator.Table.start_link(owner: "alice")
+    state = :sys.get_state(table)
+
+    :sys.replace_state(state.game, fn game ->
+      put_in(game.players[state.human_id].stack, 0)
+    end)
+
+    assert {:error, :hero_busted} = GameSimulator.Table.next_hand(table, "alice")
+  end
 end

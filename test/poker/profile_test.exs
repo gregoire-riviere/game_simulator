@@ -14,6 +14,7 @@ defmodule Poker.ProfileTest do
       assert profile.three_bet in 0..22
       assert profile.aggression >= 0.0 and profile.aggression <= 1.0
       assert profile.fold_to_cbet >= 0.0 and profile.fold_to_cbet <= 1.0
+      assert profile.showdown_curiosity >= 0.0 and profile.showdown_curiosity <= 1.0
       assert profile.memory.current_tilt == 0.0
     end)
   end

@@ -9,6 +9,7 @@ defmodule GameSimulator.Configuration do
 
   @spec server!() :: server()
   def server! do
+    # La configuration est validée tôt pour échouer clairement au démarrage.
     config = Application.fetch_env!(:game_simulator, :server)
     host = Keyword.fetch!(config, :host)
     port = Keyword.fetch!(config, :port)
@@ -70,6 +71,7 @@ defmodule GameSimulator.Configuration do
 
   @spec llm_api_key() :: String.t() | nil
   def llm_api_key do
+    # La clé est facultative en V1 : le moteur local ne fait aucun appel LLM.
     Application.fetch_env!(:game_simulator, :llm)
     |> Keyword.fetch!(:api_key)
   end
