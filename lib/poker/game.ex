@@ -12,6 +12,7 @@ defmodule Poker.Game do
   def next_action(game), do: GenServer.call(game, :next_action)
   def act(game, id, action), do: GenServer.call(game, {:act, id, action})
   def public_state(game, viewer_id), do: GenServer.call(game, {:public_state, viewer_id})
+  def decision_context(game, id), do: GenServer.call(game, {:decision_context, id})
   def internal_state(game), do: GenServer.call(game, :internal_state)
   def history(game, count), do: GenServer.call(game, {:history, count})
 
@@ -40,6 +41,8 @@ defmodule Poker.Game do
          hand_contributions: %{}, # Jetons engagés depuis le début de la main.
          current_bet: 0, # Plus grande contribution à égaler dans la rue.
          min_raise: big_blind, # Écart minimal requis pour une relance.
+         preflop_aggressor: nil, # Dernier relanceur préflop, utilisé uniquement dans le contexte de décision.
+         street_aggressor: nil, # Dernier miseur ou relanceur de la rue courante.
          active_player: nil, # Joueur dont l'action est actuellement attendue.
          history: [] # Cinquante dernières mains, de la plus récente à la plus ancienne.
        }}
@@ -117,6 +120,14 @@ defmodule Poker.Game do
     {:reply, {:ok, public_snapshot(state, viewer_id)}, state}
   end
 
+  def handle_call({:decision_context, id}, _from, state) do
+    cond do
+      state.active_player != id -> {:reply, {:error, :not_your_turn}, state}
+      not Map.has_key?(state.hole_cards, id) -> {:reply, {:error, :not_in_hand}, state}
+      true -> {:reply, {:ok, decision_snapshot(state, id)}, state}
+    end
+  end
+
   def handle_call(:internal_state, _from, state), do: {:reply, state, state}
 
   def handle_call({:history, count}, _from, state) when is_integer(count) and count > 0 do
@@ -166,6 +177,8 @@ defmodule Poker.Game do
           hand_contributions: Map.new(ids, &{&1, 0}),
           current_bet: 0,
           min_raise: state.big_blind,
+          preflop_aggressor: nil,
+          street_aggressor: nil,
           active_player: nil
         }
 
@@ -259,6 +272,8 @@ defmodule Poker.Game do
       true ->
         state = commit(state, id, amount)
         state = %{state | current_bet: total, min_raise: max(state.min_raise, raise_size)}
+        state = %{state | street_aggressor: id}
+        state = if state.phase == :preflop, do: %{state | preflop_aggressor: id}, else: state
         state = %{state | pending: pending_players(state, MapSet.new([id]))}
         state = if Map.fetch!(state.players, id).stack == 0, do: %{state | all_in: MapSet.put(state.all_in, id)}, else: state
         {:ok, state}
@@ -315,6 +330,7 @@ defmodule Poker.Game do
         street_contributions: Map.new(Map.keys(state.hole_cards), &{&1, 0}),
         current_bet: 0,
         min_raise: state.big_blind,
+        street_aggressor: nil,
         pending: pending,
         active_player: nil
       }
@@ -357,7 +373,7 @@ defmodule Poker.Game do
          }}
       end)
 
-    hand = %{dealer: state.dealer, board: state.board, players: players}
+    hand = %{dealer: state.dealer, board: state.board, players: players, winners: Map.keys(payouts)}
     %{state | history: Enum.take([hand | state.history], 50)}
   end
 
@@ -397,6 +413,8 @@ defmodule Poker.Game do
         street_contributions: %{},
         hand_contributions: %{},
         current_bet: 0,
+        preflop_aggressor: nil,
+        street_aggressor: nil,
         active_player: nil
       }
 
@@ -463,5 +481,41 @@ defmodule Poker.Game do
       small_blind: state.small_blind,
       big_blind: state.big_blind
     }
+  end
+
+  def decision_snapshot(state, id) do
+    player = Map.fetch!(state.players, id)
+    contribution = Map.fetch!(state.street_contributions, id)
+
+    %{
+      phase: state.phase,
+      cards: Map.fetch!(state.hole_cards, id),
+      board: state.board,
+      pot: Enum.sum(Map.values(state.hand_contributions)),
+      stack: player.stack,
+      position: position_for(state, id),
+      to_call: state.current_bet - contribution,
+      current_bet: state.current_bet,
+      big_blind: state.big_blind,
+      players_in_hand: length(active_ids(state)),
+      facing_cbet: state.phase != :preflop and state.current_bet > 0 and state.street_aggressor == state.preflop_aggressor,
+      actions: actions_for(state, id)
+    }
+  end
+
+  def position_for(state, id) do
+    order = ordered_ids(state, state.dealer, MapSet.to_list(state.hand_players))
+    index = Enum.find_index(order, &(&1 == id))
+
+    case {length(order), index} do
+      {2, 0} -> :button
+      {2, 1} -> :big_blind
+      {_count, 0} -> :button
+      {_count, 1} -> :small_blind
+      {_count, 2} -> :big_blind
+      {_count, value} when value == length(order) - 1 -> :cutoff
+      {_count, value} when value == length(order) - 2 -> :hijack
+      _other -> :early
+    end
   end
 end

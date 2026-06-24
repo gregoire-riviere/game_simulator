@@ -33,6 +33,7 @@ defmodule Poker.GameTest do
     assert state.players.alice.stack == 99
 
     assert {:ok, [hand]} = Poker.Game.history(game, 2)
+    assert hand.winners == [:bob]
     assert hand.players.alice == %{profit_loss: -1, result: :folded}
     assert hand.players.bob == %{profit_loss: 1, result: :won_by_fold}
     assert {:error, :invalid_history_count} = Poker.Game.history(game, 0)
@@ -69,5 +70,19 @@ defmodule Poker.GameTest do
     assert state.dealer == :alice
     assert state.street_contributions == %{alice: 0, bob: 1, charlie: 2}
     assert state.active_player == :alice
+  end
+
+  test "identifies a continuation bet in the decision context" do
+    {:ok, game} = Poker.Game.start_link(small_blind: 1, big_blind: 2)
+    {:ok, _player} = Poker.Game.join(game, :alice, 100, 1)
+    {:ok, _player} = Poker.Game.join(game, :bob, 100, 2)
+    {:ok, _state} = Poker.Game.start_hand(game)
+
+    assert {:ok, _state} = Poker.Game.act(game, :alice, {:raise_to, 6})
+    assert {:ok, _state} = Poker.Game.act(game, :bob, :call)
+    assert {:ok, _state} = Poker.Game.act(game, :bob, :check)
+    assert {:ok, _state} = Poker.Game.act(game, :alice, {:bet, 2})
+    assert {:ok, context} = Poker.Game.decision_context(game, :bob)
+    assert context.facing_cbet
   end
 end

@@ -46,4 +46,33 @@ defmodule GameSimulatorWeb.EndpointTest do
     assert %{"user" => "test-user", "exp" => expiration} = Poison.decode!(response.resp_body)
     assert is_integer(expiration)
   end
+
+  test "creates and returns only the authenticated user's table" do
+    user = "table-user-#{System.unique_integer([:positive])}"
+    {:ok, token, _expiration} = Auth.issue_token(user)
+
+    response =
+      conn(:post, "/api/table", %{})
+      |> put_req_header("authorization", "Bearer #{token}")
+      |> then(&Endpoint.call(&1, Endpoint.init([])))
+
+    assert response.status == 201
+    assert %{"players" => players} = Poison.decode!(response.resp_body)
+    assert length(players) == 6
+    assert Enum.all?(Enum.reject(players, &(&1["id"] == "hero")), &(&1["cards"] == "hidden"))
+  end
+
+  test "stops the authenticated user's table" do
+    user = "table-exit-#{System.unique_integer([:positive])}"
+    {:ok, token, _expiration} = Auth.issue_token(user)
+    {:ok, _table} = GameSimulator.Tables.start(user)
+
+    response =
+      conn(:delete, "/api/table")
+      |> put_req_header("authorization", "Bearer #{token}")
+      |> then(&Endpoint.call(&1, Endpoint.init([])))
+
+    assert response.status == 204
+    assert :error = GameSimulator.Tables.table(user)
+  end
 end

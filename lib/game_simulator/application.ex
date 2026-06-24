@@ -16,22 +16,27 @@ defmodule GameSimulator.Application do
     end
   end
 
-  defp children do
+  def children do
+    table_children = [
+      {Registry, keys: :unique, name: GameSimulator.TableRegistry},
+      {DynamicSupervisor, strategy: :one_for_one, name: GameSimulator.TableSupervisor}
+    ]
+
     if GameSimulator.Configuration.http_server?() do
       %{host: host, port: port} = GameSimulator.Configuration.server!()
 
-      [
+      table_children ++ [
         {Plug.Cowboy,
          scheme: :http,
          plug: GameSimulatorWeb.Endpoint,
          options: [ip: parse_ip!(host), port: port]}
       ]
     else
-      []
+      table_children
     end
   end
 
-  defp parse_ip!(host) do
+  def parse_ip!(host) do
     case :inet.parse_address(String.to_charlist(host)) do
       {:ok, address} -> address
       {:error, _reason} -> raise ArgumentError, "game_simulator server host must be an IP address"

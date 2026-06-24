@@ -43,7 +43,7 @@ defmodule GameSimulatorWeb.Endpoint do
   end
 
   post "/api/auth/logout" do
-    not_implemented(conn, "logout")
+    Plug.Conn.send_resp(conn, 204, "")
   end
 
   get "/api/auth/me" do
@@ -54,6 +54,74 @@ defmodule GameSimulatorWeb.Endpoint do
     else
       send_json(conn, 200, %{user: conn.assigns.token_user, exp: conn.assigns.token_exp})
     end
+  end
+
+  post "/api/table" do
+    authenticated(conn, fn conn, user ->
+      with {:ok, table} <- GameSimulator.Tables.start(user),
+           {:ok, state} <- GameSimulator.Table.state(table, user) do
+        send_json(conn, 201, state)
+      else
+        {:error, reason} -> table_error(conn, reason)
+      end
+    end)
+  end
+
+  get "/api/table" do
+    authenticated(conn, fn conn, user ->
+      case GameSimulator.Tables.table(user) do
+        {:ok, table} ->
+          case GameSimulator.Table.state(table, user) do
+            {:ok, state} -> send_json(conn, 200, state)
+            {:error, reason} -> table_error(conn, reason)
+          end
+
+        :error -> send_json(conn, 404, %{error: "table_not_found"})
+      end
+    end)
+  end
+
+  post "/api/table/action" do
+    authenticated(conn, fn conn, user ->
+      with {:ok, table} <- table_for(user),
+           {:ok, action} <- parse_action(conn.body_params),
+           {:ok, state} <- GameSimulator.Table.act(table, user, action) do
+        send_json(conn, 200, state)
+      else
+        {:error, reason} -> table_error(conn, reason)
+      end
+    end)
+  end
+
+  post "/api/table/advance-bot" do
+    authenticated(conn, fn conn, user ->
+      with {:ok, table} <- table_for(user),
+           {:ok, state} <- GameSimulator.Table.advance_bot(table, user) do
+        send_json(conn, 200, state)
+      else
+        {:error, reason} -> table_error(conn, reason)
+      end
+    end)
+  end
+
+  post "/api/table/next-hand" do
+    authenticated(conn, fn conn, user ->
+      with {:ok, table} <- table_for(user),
+           {:ok, state} <- GameSimulator.Table.next_hand(table, user) do
+        send_json(conn, 200, state)
+      else
+        {:error, reason} -> table_error(conn, reason)
+      end
+    end)
+  end
+
+  delete "/api/table" do
+    authenticated(conn, fn conn, user ->
+      case GameSimulator.Tables.stop(user) do
+        :ok -> Plug.Conn.send_resp(conn, 204, "")
+        {:error, _reason} -> send_json(conn, 500, %{error: "table_stop_failed"})
+      end
+    end)
   end
 
   match "/api/*path" do
@@ -68,20 +136,44 @@ defmodule GameSimulatorWeb.Endpoint do
     )
   end
 
-  defp static_directory do
+  def static_directory do
     Application.app_dir(:game_simulator, "priv/static")
   end
 
-  defp not_implemented(conn, feature) do
+  def not_implemented(conn, feature) do
     send_json(conn, 501, %{
       error: "not_implemented",
       message: "Authentication #{feature} is not configured yet"
     })
   end
 
-  defp send_json(conn, status, body) do
+  def send_json(conn, status, body) do
     conn
     |> Plug.Conn.put_resp_content_type("application/json")
     |> Plug.Conn.send_resp(status, Poison.encode!(body))
   end
+
+  def authenticated(conn, fun) do
+    conn = Auth.verify(conn)
+    if conn.halted, do: conn, else: fun.(conn, conn.assigns.token_user)
+  end
+
+  def table_for(user) do
+    case GameSimulator.Tables.table(user) do
+      {:ok, table} -> {:ok, table}
+      :error -> {:error, :table_not_found}
+    end
+  end
+
+  def parse_action(%{"action" => action}) when action in ["fold", "check", "call", "all_in"] do
+    {:ok, String.to_existing_atom(action)}
+  end
+
+  def parse_action(%{"action" => "bet", "amount" => amount}) when is_integer(amount) and amount > 0, do: {:ok, {:bet, amount}}
+  def parse_action(%{"action" => "raise_to", "amount" => amount}) when is_integer(amount) and amount > 0, do: {:ok, {:raise_to, amount}}
+  def parse_action(_params), do: {:error, :invalid_action}
+
+  def table_error(conn, :table_not_found), do: send_json(conn, 404, %{error: "table_not_found"})
+  def table_error(conn, :forbidden), do: send_json(conn, 403, %{error: "forbidden"})
+  def table_error(conn, reason), do: send_json(conn, 422, %{error: Atom.to_string(reason)})
 end
