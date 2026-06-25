@@ -30,6 +30,7 @@ const handResultReason = document.getElementById("hand-result-reason");
 const handResultWinners = document.getElementById("hand-result-winners");
 let table = null;
 let botTimer = null;
+let actionPending = false;
 
 function showDashboard(user) {
   sessionUser.textContent = user;
@@ -44,6 +45,7 @@ function showLogin() {
   dashboard.hidden = true;
   loginScreen.hidden = false;
   table = null;
+  actionPending = false;
   clearTimeout(botTimer);
 }
 
@@ -223,6 +225,7 @@ function renderResult() {
 
 function renderTable(nextTable) {
   table = nextTable;
+  actionPending = false;
   clearTimeout(botTimer);
   tableLobby.hidden = true;
   tableScreen.hidden = false;
@@ -245,9 +248,16 @@ function renderTable(nextTable) {
 }
 
 async function submitAction(action) {
+  if (actionPending) return;
+
+  actionPending = true;
+  actionPanel.querySelectorAll("button, input").forEach((control) => control.disabled = true);
+
   try {
     renderTable(await api("/api/table/action", { method: "POST", body: JSON.stringify(action) }));
   } catch (_error) {
+    actionPending = false;
+    actionPanel.querySelectorAll("button, input").forEach((control) => control.disabled = false);
     tableStatus.textContent = "Cette action n’est plus disponible.";
   }
 }
