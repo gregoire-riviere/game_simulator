@@ -571,7 +571,9 @@ defmodule Poker.Game do
     players =
       Map.new(state.players, fn {id, player} ->
         cards = if id == viewer_id, do: Map.get(state.hole_cards, id, []), else: :hidden
-        {id, Map.merge(Map.take(player, [:id, :seat, :stack]), %{cards: cards, folded: id in state.folded, contribution: Map.get(state.hand_contributions, id, 0)})}
+        position = if MapSet.member?(state.hand_players, id), do: position_for(state, id), else: nil
+
+        {id, Map.merge(Map.take(player, [:id, :seat, :stack]), %{cards: cards, folded: id in state.folded, contribution: Map.get(state.hand_contributions, id, 0), position: position})}
       end)
 
     %{

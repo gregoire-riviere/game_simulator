@@ -105,8 +105,10 @@ function renderPlayers(players) {
   players.forEach((player) => {
     const seat = document.createElement("article");
     seat.className = `seat seat-${player.seat}${player.active ? " active" : ""}${player.folded ? " folded" : ""}`;
-    seat.innerHTML = `<strong></strong><span class="seat-stack"></span><span class="seat-status"></span><div class="hole-cards"></div>`;
+    seat.innerHTML = `<div class="seat-heading"><strong></strong><span class="position-badge"></span></div><span class="seat-stack"></span><span class="seat-status"></span><div class="hole-cards"></div>`;
     seat.querySelector("strong").textContent = player.name;
+    seat.querySelector(".position-badge").textContent = player.dealer_button ? "BTN" : player.position;
+    seat.querySelector(".position-badge").title = player.dealer_button ? "Bouton" : "Position";
     seat.querySelector(".seat-stack").textContent = money(player.stack);
     seat.querySelector(".seat-status").textContent = player.active ? "À jouer" : player.folded ? "Couché" : "";
     const cards = seat.querySelector(".hole-cards");
