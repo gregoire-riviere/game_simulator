@@ -73,7 +73,7 @@ users_file = env!("GAME_SIMULATOR_USERS_FILE", :string!, default_users_file)
 users_file =
   if Path.type(users_file) == :relative, do: Path.expand(users_file, release_root), else: users_file
 
-token_ttl_seconds = env!("GAME_SIMULATOR_TOKEN_TTL_SECONDS", :integer, 3600)
+token_ttl_seconds = env!("GAME_SIMULATOR_TOKEN_TTL_SECONDS", :integer, 86_400)
 
 unless token_ttl_seconds > 0 do
   raise ArgumentError,

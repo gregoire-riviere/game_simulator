@@ -23,7 +23,7 @@ defmodule GameSimulator.ConfigurationTest do
     assert directory =~ "game_simulator-test"
     assert console_level == :debug
     assert %{host: "127.0.0.1", port: 4000} = Configuration.server!()
-    assert %{token_ttl_seconds: 3600} = Configuration.auth!()
+    assert %{token_ttl_seconds: 86_400} = Configuration.auth!()
     assert is_nil(Configuration.llm_api_key())
   end
 

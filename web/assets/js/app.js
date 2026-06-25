@@ -39,11 +39,12 @@ function showDashboard(user) {
   dashboard.hidden = false;
 }
 
-function showLogin() {
+function showLogin(message = "") {
   sessionStorage.removeItem(tokenKey);
   appShell.classList.remove("dashboard-open");
   dashboard.hidden = true;
   loginScreen.hidden = false;
+  authStatus.textContent = message;
   table = null;
   actionPending = false;
   clearTimeout(botTimer);
@@ -59,6 +60,11 @@ async function api(path, options = {}) {
     ...options,
     headers: { "content-type": "application/json", authorization: `Bearer ${sessionStorage.getItem(tokenKey)}`, ...(options.headers || {}) }
   });
+
+  if (response.status === 401) {
+    showLogin("Votre session a expiré, reconnectez-vous pour continuer.");
+    throw new Error("session_expired");
+  }
 
   if (!response.ok) throw new Error((await response.json().catch(() => ({}))).error || "request_failed");
   if (response.status === 204) return null;
@@ -88,7 +94,7 @@ async function restoreSession() {
     showDashboard(session.user);
     restoreTable();
   } catch (_error) {
-    showLogin();
+    if (sessionStorage.getItem(tokenKey)) showLogin("Votre session a expiré, reconnectez-vous pour continuer.");
   }
 }
 
