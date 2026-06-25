@@ -59,6 +59,7 @@ defmodule Poker.Game do
          current_bet: 0, # Plus grande contribution à égaler dans la rue.
          min_raise: big_blind, # Écart minimal requis pour une relance.
          preflop_aggressor: nil, # Dernier relanceur préflop, utilisé uniquement dans le contexte de décision.
+         preflop_raise_count: 0, # Nombre de relances complètes préflop, open inclus.
          street_aggressor: nil, # Dernier miseur ou relanceur de la rue courante.
          active_player: nil, # Joueur dont l'action est actuellement attendue.
          history: [] # Cinquante dernières mains, de la plus récente à la plus ancienne.
@@ -205,6 +206,7 @@ defmodule Poker.Game do
           current_bet: 0,
           min_raise: state.big_blind,
           preflop_aggressor: nil,
+          preflop_raise_count: 0,
           street_aggressor: nil,
           active_player: nil
         }
@@ -335,6 +337,7 @@ defmodule Poker.Game do
         state = %{state | current_bet: total, min_raise: if(full_raise, do: max(state.min_raise, raise_size), else: state.min_raise)}
         state = if full_raise, do: %{state | street_aggressor: id}, else: state
         state = if full_raise and state.phase == :preflop, do: %{state | preflop_aggressor: id}, else: state
+        state = if full_raise and state.phase == :preflop, do: %{state | preflop_raise_count: state.preflop_raise_count + 1}, else: state
         state = update_pending_after_raise(state, id, pending_before, full_raise)
         state = if Map.fetch!(state.players, id).stack == 0, do: %{state | all_in: MapSet.put(state.all_in, id)}, else: state
         {:ok, state}
@@ -540,6 +543,7 @@ defmodule Poker.Game do
         current_hand_actions: [],
         current_bet: 0,
         preflop_aggressor: nil,
+        preflop_raise_count: 0,
         street_aggressor: nil,
         active_player: nil
       }
@@ -630,6 +634,7 @@ defmodule Poker.Game do
       stack_pressure: stack_pressure(state, player, contribution),
       effective_stack: effective_stack(state, id),
       current_bet: state.current_bet,
+      preflop_raise_count: state.preflop_raise_count,
       big_blind: state.big_blind,
       players_in_hand: length(active_ids(state)),
       facing_cbet: state.phase != :preflop and state.current_bet > 0 and state.street_aggressor == state.preflop_aggressor,

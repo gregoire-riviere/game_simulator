@@ -81,17 +81,18 @@ defmodule Poker.DecisionTest do
     assert Poker.Decision.preflop_situation(%{to_call: 50, stack: 50, current_bet: 50, big_blind: 2}) == :facing_all_in
   end
 
-  test "does not fold QQ+ or AK against a large preflop raise" do
+  test "does not fold QQ+ or AK against a four bet" do
     profile = %{Poker.Profile.new(1) | archetype: :tag, three_bet: 0}
 
     context = %{
       phase: :preflop,
       cards: [{"A", "hearts"}, {"K", "clubs"}],
       position: :button,
-      to_call: 52,
+      to_call: 36,
       stack: 200,
       effective_stack: 200,
-      current_bet: 54,
+      current_bet: 38,
+      preflop_raise_count: 3,
       big_blind: 2,
       pot: 80,
       pot_odds: 0.35,

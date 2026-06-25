@@ -104,4 +104,18 @@ defmodule Poker.GameTest do
     assert {:ok, context} = Poker.Game.decision_context(game, :bob)
     assert context.facing_cbet
   end
+
+  test "exposes preflop raise count in decision context" do
+    {:ok, game} = Poker.Game.start_link(small_blind: 1, big_blind: 2)
+    {:ok, _player} = Poker.Game.join(game, :alice, 200, 1)
+    {:ok, _player} = Poker.Game.join(game, :bob, 200, 2)
+    {:ok, _state} = Poker.Game.start_hand(game)
+
+    assert {:ok, _state} = Poker.Game.act(game, :alice, {:raise_to, 6})
+    assert {:ok, _state} = Poker.Game.act(game, :bob, {:raise_to, 18})
+    assert {:ok, _state} = Poker.Game.act(game, :alice, {:raise_to, 40})
+    assert {:ok, context} = Poker.Game.decision_context(game, :bob)
+
+    assert context.preflop_raise_count == 3
+  end
 end

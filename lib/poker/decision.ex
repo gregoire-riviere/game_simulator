@@ -47,7 +47,11 @@ defmodule Poker.Decision do
   end
 
   def premium_vs_large_preflop_raise?(profile, context) do
-    premium_preflop_hand?(context.cards) and context.current_bet > context.big_blind * 25 and not ultra_deep_nit?(profile, context)
+    premium_preflop_hand?(context.cards) and premium_preflop_pressure?(context) and not ultra_deep_nit?(profile, context)
+  end
+
+  def premium_preflop_pressure?(context) do
+    Map.get(context, :preflop_raise_count, 0) >= 3 or context.current_bet > context.big_blind * 25
   end
 
   def premium_preflop_hand?(cards) do
