@@ -7,7 +7,7 @@ defmodule Poker.ProfileTest do
     assert length(profiles) == 5
 
     Enum.each(profiles, fn profile ->
-      assert profile.archetype in [:fish_passif, :tag, :nit, :lag, :maniaque, :recreatif]
+      assert profile.archetype in [:calling_station, :limp_caller, :fit_or_fold, :nit_weak, :tag, :lag, :spewy_aggro]
       assert profile.vpip in 10..70
       assert profile.pfr in 2..50
       assert profile.pfr <= profile.vpip

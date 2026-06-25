@@ -1,8 +1,8 @@
 # GameSimulator
 
 GameSimulator is an Elixir application intended to run locally during development
-and as a Mix release in production. It currently configures its HTTP server
-parameters but does not start Cowboy until an HTTP API is added.
+and as a Mix release in production. It serves a small browser client and a JSON
+API for authentication and the current poker table.
 
 ## Prerequisites
 
@@ -111,14 +111,45 @@ The following JSON routes are available:
 | `POST /api/auth/register` | Returns `501 not_implemented`. |
 | `POST /api/auth/login` | Accepts JSON `{ "user", "password" }` and returns a signed token on success. |
 | `POST /api/auth/refresh` | Returns `501 not_implemented`. |
-| `POST /api/auth/logout` | Returns `501 not_implemented`. |
+| `POST /api/auth/logout` | Returns `204`; the browser removes the stateless token. |
 | `GET /api/auth/me` | Requires `Authorization: Bearer <token>` and returns the token subject and expiration. |
+| `POST /api/table` | Creates or returns the authenticated user's temporary poker table. |
+| `GET /api/table` | Returns the authenticated user's table state. |
+| `GET /api/table/extract?n=10` | Exports recent hands as Markdown, from 1 to 50 hands. |
+| `POST /api/table/action` | Plays a hero action: `fold`, `check`, `call`, `all_in`, `bet`, or `raise_to`. |
+| `POST /api/table/advance-bot` | Advances exactly one PNJ action when a bot is active. |
+| `POST /api/table/next-hand` | Starts the next hand after the previous one is finished. |
+| `DELETE /api/table` | Stops the authenticated user's temporary table. |
 
 Tokens are signed and verified with `HTMLHandler.Token`; the signing secret is
 stored in `GAME_SIMULATOR_DATA_DIR/token.secret`. The generic token issuance API
 from `html_handler` is deliberately disabled because it accepts an arbitrary
 user identifier. A future credential provider must authenticate the user first,
 then call `GameSimulatorWeb.Auth.issue_token/1` on the server.
+
+## Poker mode
+
+The current poker implementation targets a simple NL2 6-max elimination table:
+
+- blinds are `1/2`, represented as integer cents;
+- every player starts with `200`;
+- the hero sits at seat 6 and five PNJ fill seats 1 to 5;
+- `mode: :elimination` is explicit: players with no chips do not rebuy or auto top-up;
+- a new hand can start only if the hero still has chips.
+
+The rules engine handles betting order, legal check/call/fold/bet/raise actions,
+all-in calls, incomplete all-in raises that do not reopen raises to players who
+already acted, automatic board rollout when nobody can act, side pots, split pots,
+and odd chips.
+
+PNJ decisions are local heuristics, not LLM calls. Their profiles are weighted
+toward NL2 patterns such as `calling_station`, `limp_caller`, `fit_or_fold`,
+`nit_weak`, `tag`, `lag`, and `spewy_aggro`. Decisions use the current price to
+call (`to_call`, pot odds, bet size, and stack pressure), broad preflop situations
+such as limp/raise/all-in, simple preflop sizing rules, and postflop categories
+that distinguish made hands using private cards from hands mostly on the board.
+
+Rake, cash-game rebuy, and auto top-up are intentionally not enabled in this V1.
 
 ## Release
 

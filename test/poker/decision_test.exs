@@ -34,6 +34,24 @@ defmodule Poker.DecisionTest do
     assert Poker.Decision.draw_category([{"A", "hearts"}, {"K", "hearts"}], [{"Q", "hearts"}, {"J", "hearts"}, {"2", "clubs"}]) == :combo_draw
   end
 
+  test "classifies made hands with hole-card relevance" do
+    board = [{"A", "clubs"}, {"7", "diamonds"}, {"2", "spades"}]
+
+    assert Poker.Decision.made_hand_category([{"K", "clubs"}, {"K", "hearts"}], board) == :underpair
+    assert Poker.Decision.made_hand_category([{"A", "hearts"}, {"K", "hearts"}], board) == :top_pair_good_kicker
+    assert Poker.Decision.made_hand_category([{"Q", "hearts"}, {"J", "hearts"}], [{"9", "clubs"}, {"9", "diamonds"}, {"2", "spades"}]) == :board_pair
+    assert Poker.Decision.hand_strength_category(:board_pair) == :air
+  end
+
+  test "preflop situation and call chance react to all-in pressure" do
+    profile = %{Poker.Profile.new(1) | archetype: :tag, call_too_wide: false}
+    cheap = %{pot_odds: 0.10, bet_size_ratio: 0.10, stack_pressure: 0.05}
+    expensive = %{pot_odds: 0.45, bet_size_ratio: 1.50, stack_pressure: 1.00}
+
+    assert Poker.Decision.preflop_call_chance(profile, cheap) > Poker.Decision.preflop_call_chance(profile, expensive)
+    assert Poker.Decision.preflop_situation(%{to_call: 50, stack: 50, current_bet: 50, big_blind: 2}) == :facing_all_in
+  end
+
   test "returns only legal postflop action types across weighted draws" do
     profile = Poker.Profile.new(1)
 

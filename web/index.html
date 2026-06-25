@@ -74,8 +74,23 @@
           <section id="table-screen" class="table-screen" hidden aria-label="Table de poker">
             <div class="table-toolbar">
               <p id="table-status" class="form-status" role="status" aria-live="polite"></p>
-              <button id="leave-table-button" class="leave-table-button" type="button">Quitter la table</button>
+              <div class="table-toolbar-actions">
+                <label class="extract-count-label" for="extract-count">Mains</label>
+                <input id="extract-count" class="extract-count" type="number" min="1" max="50" value="10" />
+                <button id="extract-button" class="leave-table-button" type="button">Extract LLM</button>
+                <button id="leave-table-button" class="leave-table-button" type="button">Quitter la table</button>
+              </div>
             </div>
+            <section id="extract-panel" class="extract-panel" hidden aria-labelledby="extract-title">
+              <div class="extract-header">
+                <div>
+                  <p class="eyebrow">Export</p>
+                  <h2 id="extract-title">Résumé condensé pour LLM</h2>
+                </div>
+                <button id="copy-extract-button" class="leave-table-button" type="button">Copier</button>
+              </div>
+              <textarea id="extract-output" readonly spellcheck="false"></textarea>
+            </section>
             <div id="poker-table" class="poker-table">
               <div class="pot">Pot <strong id="pot">0,00 €</strong></div>
               <div id="board" class="board" aria-label="Cartes communes"></div>

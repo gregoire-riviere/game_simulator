@@ -26,13 +26,15 @@ defmodule GameSimulator.Table do
   def act(table, owner, action), do: GenServer.call(table, {:act, owner, action})
   def advance_bot(table, owner), do: GenServer.call(table, {:advance_bot, owner})
   def next_hand(table, owner), do: GenServer.call(table, {:next_hand, owner})
+  def extract(table, owner, count), do: GenServer.call(table, {:extract, owner, count})
 
   @impl true
   def init(options) do
     # La table V1 est toujours 6-max : le héros reçoit le siège 6, les PNJ les autres.
     owner = Keyword.fetch!(options, :owner)
+    mode = Keyword.get(options, :mode, :elimination)
     provider = Keyword.get(options, :profile_provider, Poker.LocalProfileProvider)
-    {:ok, game} = Poker.Game.start_link(small_blind: 1, big_blind: 2)
+    {:ok, game} = Poker.Game.start_link(small_blind: 1, big_blind: 2, mode: mode)
     profiles = provider.generate(5)
     human_id = {:human, owner}
 
@@ -44,7 +46,7 @@ defmodule GameSimulator.Table do
     {:ok, _state} = Poker.Game.start_hand(game)
 
     profiles = Map.new(Enum.with_index(profiles, 1), fn {profile, seat} -> {{:bot, seat}, profile} end)
-    {:ok, %{owner: owner, game: game, human_id: human_id, profiles: profiles, actions: []}}
+    {:ok, %{owner: owner, game: game, human_id: human_id, profiles: profiles, actions: [], mode: mode}}
   end
 
   @impl true
@@ -94,6 +96,16 @@ defmodule GameSimulator.Table do
     end
   end
 
+  def handle_call({:extract, owner, count}, _from, state) do
+    with :ok <- owner?(state, owner),
+         {:ok, count} <- valid_extract_count(count),
+         {:ok, hands} <- Poker.Game.history(state.game, count) do
+      {:reply, {:ok, %{count: length(hands), format: "markdown", text: extract_text(state, hands)}}, state}
+    else
+      {:error, reason} -> {:reply, {:error, reason}, state}
+    end
+  end
+
   def reply(state, owner), do: {:reply, {:ok, public_state(state, owner)}, state}
   def owner?(%{owner: owner}, owner), do: :ok
   def owner?(_state, _owner), do: {:error, :forbidden}
@@ -136,6 +148,55 @@ defmodule GameSimulator.Table do
 
   def update_profiles(state, _game_state), do: state
 
+  def valid_extract_count(count) when is_integer(count) and count in 1..50, do: {:ok, count}
+  def valid_extract_count(_count), do: {:error, :invalid_extract_count}
+
+  def extract_text(state, hands) do
+    header = [
+      "# Export table NL2",
+      "",
+      "Format: centimes entiers. Blindes: 1/2. Les mains sont listées de la plus récente à la plus ancienne.",
+      ""
+    ]
+
+    body =
+      hands
+      |> Enum.with_index(1)
+      |> Enum.flat_map(fn {hand, index} -> extract_hand(state, hand, index) end)
+
+    Enum.join(header ++ body, "\n")
+  end
+
+  def extract_hand(state, hand, index) do
+    [
+      "## Main #{index}",
+      "",
+      "- Dealer: #{player_name(state, hand.dealer)}",
+      "- Board: #{cards_text(hand.board)}",
+      "- Winners: #{hand.winners |> Enum.map(&player_name(state, &1)) |> Enum.join(", ")}",
+      "",
+      "### Joueurs",
+      Enum.map(hand.players |> Enum.sort_by(fn {_id, player} -> player.seat end), fn {id, player} ->
+        "- #{player_name(state, id)} seat=#{player.seat} cards=#{cards_text(player.cards)} stack_start=#{player.starting_stack} contribution=#{player.contribution} payout=#{player.payout} profit_loss=#{player.profit_loss} stack_final=#{player.final_stack} result=#{result_text(player.result)}"
+      end),
+      "",
+      "### Actions",
+      Enum.map(hand.actions, &extract_action(state, &1)),
+      ""
+    ]
+    |> List.flatten()
+  end
+
+  def extract_action(state, action) do
+    "- #{action.street} #{player_name(state, action.player)} #{action.action} amount=#{action.amount} stack=#{action.stack_before}->#{action.stack_after} contribution=#{action.contribution_before}->#{action.contribution_after} pot=#{action.pot_before}->#{action.pot_after}"
+  end
+
+  def cards_text(cards), do: cards(cards) |> Enum.join(" ")
+  def result_text(:folded), do: "folded"
+  def result_text(:won_by_fold), do: "won_by_fold"
+  def result_text(%{cards: _cards, hand: hand}), do: "#{hand_category(hand.category)} #{Enum.join(hand.ranks, " ")}"
+  def result_text(result), do: inspect(result)
+
   def update_profile_memory(profile, result) do
     # Le tilt diminue lentement, puis bouge selon les gros pots gagnés ou perdus.
     tilt = max(profile.memory.current_tilt * 0.95, 0.0)
@@ -176,6 +237,7 @@ defmodule GameSimulator.Table do
 
     %{
       owner: owner,
+      mode: state.mode,
       phase: snapshot.phase,
       dealer: public_id(state, snapshot.dealer),
       board: cards(snapshot.board),

@@ -6,6 +6,7 @@ defmodule GameSimulator.TableTest do
     assert {:ok, state} = GameSimulator.Table.state(table, "alice")
 
     assert length(state.players) == 6
+    assert state.mode == :elimination
     assert length(Enum.find(state.players, &(&1.id == "hero")).cards) == 2
     assert Enum.all?(Enum.reject(state.players, &(&1.id == "hero")), &(&1.cards == :hidden))
     refute Map.has_key?(state, :profiles)

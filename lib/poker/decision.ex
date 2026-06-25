@@ -14,30 +14,44 @@ defmodule Poker.Decision do
   end
 
   def preflop(profile, context) do
-    # Préflop : aucune carte commune, la décision dépend surtout de la range et position.
-    facing_open = context.current_bet > context.big_blind
+    # Préflop : on sépare les grandes situations avant d'appliquer les ranges.
+    situation = preflop_situation(context)
     tilt = tilt_effect(profile)
     vpip = effective_rate(profile.vpip, context.position)
     pfr = effective_rate(profile.pfr, context.position)
     three_bet = effective_rate(profile.three_bet, context.position)
 
     cond do
-      facing_open and in_top_percent?(context.cards, three_bet) and chance(0.7 + tilt) -> raise_action(profile, context)
-      facing_open and in_top_percent?(context.cards, vpip) -> call_or_fold(profile, context, preflop_call_chance(profile))
-      not facing_open and in_top_percent?(context.cards, pfr) -> bet(profile, context)
-      not facing_open and in_top_percent?(context.cards, vpip) -> passive_action(context)
+      situation == :facing_all_in and in_top_percent?(context.cards, max(4, three_bet)) -> call_or_fold(profile, context, 0.55)
+      situation == :facing_all_in -> fold_or_check(context)
+      situation == :facing_raise and in_top_percent?(context.cards, three_bet) and chance(0.65 + tilt) -> raise_action(profile, context)
+      situation == :facing_raise and in_top_percent?(context.cards, vpip) -> call_or_fold(profile, context, preflop_call_chance(profile, context))
+      situation == :facing_limp and in_top_percent?(context.cards, pfr) and chance(0.75 + tilt) -> raise_action(profile, context)
+      situation == :facing_limp and in_top_percent?(context.cards, vpip) -> call_or_fold(profile, context, 0.65)
+      situation == :no_raise_yet and in_top_percent?(context.cards, pfr) -> raise_action(profile, context)
+      situation == :no_raise_yet and in_top_percent?(context.cards, vpip) -> passive_action(context)
       chance(profile.stupid_mistake_frequency) -> passive_action(context)
       true -> fold_or_check(context)
     end
   end
 
+  def preflop_situation(context) do
+    cond do
+      context.to_call >= context.stack and context.to_call > 0 -> :facing_all_in
+      context.current_bet > context.big_blind -> :facing_raise
+      context.to_call > 0 -> :facing_limp
+      true -> :no_raise_yet
+    end
+  end
+
   def postflop(profile, context) do
-    category = hand_category(context.cards ++ context.board)
+    category = context.cards |> made_hand_category(context.board) |> hand_strength_category()
     draw = draw_category(context.cards, context.board)
 
     # On part d'un comportement neutre, puis le profil et le tilt le déforment.
     probabilities = base_postflop_probabilities(category, draw, context)
     probabilities = apply_profile_biases(probabilities, profile, category, draw, context)
+    probabilities = apply_price_pressure(probabilities, profile, context)
     probabilities = apply_tilt(probabilities, profile)
     probabilities |> normalize_probabilities() |> weighted_random() |> postflop_action(profile, context)
   end
@@ -81,6 +95,23 @@ defmodule Poker.Decision do
     else
       probabilities
     end
+  end
+
+  def apply_price_pressure(probabilities, _profile, %{to_call: 0}), do: probabilities
+
+  def apply_price_pressure(probabilities, profile, context) do
+    pressure = price_pressure(context)
+    curiosity = if profile.call_too_wide, do: 0.25, else: 0.0
+
+    probabilities
+    |> scale_probability(:call, max(0.15, 1.25 - pressure + curiosity))
+    |> scale_probability(:raise, max(0.20, 1.10 - pressure * 0.6 + profile.aggression * 0.2))
+    |> scale_probability(:fold, 0.75 + pressure)
+  end
+
+  def price_pressure(context) do
+    # Combine pot odds, taille relative au pot et pression sur le stack sans modèle d'équité lourd.
+    context.pot_odds * 1.2 + min(context.bet_size_ratio, 2.0) * 0.45 + min(context.stack_pressure, 1.0) * 0.9
   end
 
   def apply_tilt(probabilities, profile) do
@@ -244,6 +275,55 @@ defmodule Poker.Decision do
     end
   end
 
+  def made_hand_category(hole_cards, board) do
+    value = Poker.best_hand(hole_cards ++ board)
+    hole_ranks = Enum.map(hole_cards, fn {rank, _suit} -> Poker.rank_value(rank) end)
+    board_ranks = Enum.map(board, fn {rank, _suit} -> Poker.rank_value(rank) end)
+
+    case value do
+      {made, _, _, _, _, _} when made >= 6 -> :nuts
+      {5, _, _, _, _, _} -> :flush
+      {4, _, _, _, _, _} -> :straight
+      {3, trips, _, _, _, _} -> if(trips in hole_ranks, do: :set_or_trips, else: :board_trips)
+      {2, high_pair, low_pair, _, _, _} -> two_pair_category(high_pair, low_pair, hole_ranks)
+      {1, pair, kicker, _, _, _} -> pair_category(pair, kicker, hole_ranks, board_ranks)
+      _other -> unpaired_category(hole_ranks, board_ranks)
+    end
+  end
+
+  def two_pair_category(high_pair, low_pair, hole_ranks) do
+    if high_pair in hole_ranks or low_pair in hole_ranks, do: :two_pair, else: :board_two_pair
+  end
+
+  def pair_category(pair, kicker, hole_ranks, board_ranks) do
+    board_high = Enum.max(board_ranks)
+
+    cond do
+      pair not in hole_ranks -> :board_pair
+      Enum.all?(board_ranks, &(pair > &1)) -> :overpair
+      pair not in board_ranks and pair < board_high -> :underpair
+      pair == board_high and kicker >= 11 -> :top_pair_good_kicker
+      pair == board_high -> :top_pair_bad_kicker
+      pair > Enum.min(board_ranks) -> :middle_pair
+      true -> :bottom_pair
+    end
+  end
+
+  def unpaired_category(hole_ranks, board_ranks) do
+    board_high = Enum.max(board_ranks)
+    if Enum.count(hole_ranks, &(&1 > board_high)) == 2, do: :two_overcards, else: :air
+  end
+
+  def hand_strength_category(category) do
+    case category do
+      :nuts -> :nuts
+      category when category in [:flush, :straight, :set_or_trips] -> :very_strong
+      category when category in [:two_pair, :overpair, :top_pair_good_kicker] -> :strong
+      category when category in [:top_pair_bad_kicker, :middle_pair, :bottom_pair, :board_trips, :board_two_pair] -> :medium
+      _other -> :air
+    end
+  end
+
   def tilt_effect(profile) do
     profile.memory.current_tilt * (1 - profile.tilt_resistance)
   end
@@ -263,31 +343,62 @@ defmodule Poker.Decision do
   end
 
   def sizing(%{min: min, max: max}, profile, context, action_type) do
-    fraction = pot_fraction(profile)
-    amount = round(context.pot * fraction)
-    amount = if action_type == :raise, do: context.current_bet + amount, else: amount
+    amount =
+      if Map.get(context, :phase) == :preflop do
+        preflop_sizing(profile, context, action_type)
+      else
+        fraction = pot_fraction(profile)
+        amount = round(context.pot * fraction)
+        if action_type == :raise, do: context.current_bet + amount, else: amount
+      end
 
     # Le maximum légal correspond souvent au stack : il ne définit pas une mise normale.
     realistic_max = min(max, max(min, round(context.pot * 1.5)))
     amount |> max(min) |> min(realistic_max)
   end
 
+  def preflop_sizing(profile, context, :raise) do
+    cond do
+      context.current_bet <= context.big_blind and profile.archetype in [:calling_station, :limp_caller] and chance(profile.weird_sizing_frequency) ->
+        Enum.random([context.big_blind * 2, context.big_blind * 4])
+
+      context.current_bet <= context.big_blind and profile.archetype == :spewy_aggro ->
+        Enum.random([context.big_blind * 3, context.big_blind * 4, context.big_blind * 5])
+
+      context.current_bet <= context.big_blind ->
+        Enum.random([round(context.big_blind * 2.5), context.big_blind * 3])
+
+      context.position in [:button, :cutoff] ->
+        round(context.current_bet * 3)
+
+      true ->
+        round(context.current_bet * 3.5)
+    end
+  end
+
+  def preflop_sizing(_profile, context, _action_type), do: round(context.big_blind * 3)
+
   def pot_fraction(profile) do
     cond do
       chance(profile.weird_sizing_frequency * 0.25) -> Enum.random([1.25, 1.5])
-      profile.archetype == :fish_passif -> Enum.random([0.25, 0.33, 0.5, 0.75])
-      profile.archetype == :maniaque -> Enum.random([0.5, 0.75, 1.0, 1.25])
+      profile.archetype in [:calling_station, :limp_caller] -> Enum.random([0.25, 0.33, 0.5, 0.75])
+      profile.archetype == :spewy_aggro -> Enum.random([0.5, 0.75, 1.0, 1.25])
       true -> Enum.random([0.33, 0.5, 0.66])
     end
   end
 
-  def preflop_call_chance(profile) do
-    cond do
-      profile.call_too_wide -> 0.75
-      profile.archetype == :nit -> 0.35
-      profile.archetype == :tag -> 0.50
-      true -> 0.55
-    end
+  def preflop_call_chance(profile), do: preflop_call_chance(profile, %{pot_odds: 0.0, bet_size_ratio: 0.0, stack_pressure: 0.0})
+
+  def preflop_call_chance(profile, context) do
+    base =
+      cond do
+        profile.call_too_wide -> 0.75
+        profile.archetype == :nit_weak -> 0.35
+        profile.archetype == :tag -> 0.50
+        true -> 0.55
+      end
+
+    max(0.05, base - price_pressure(context) * 0.25)
   end
 
   def call_or_fold(profile, context), do: call_or_fold(profile, context, preflop_call_chance(profile))

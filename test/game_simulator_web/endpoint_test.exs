@@ -75,4 +75,19 @@ defmodule GameSimulatorWeb.EndpointTest do
     assert response.status == 204
     assert :error = GameSimulator.Tables.table(user)
   end
+
+  test "exports recent hands only for the authenticated user's table" do
+    user = "table-export-#{System.unique_integer([:positive])}"
+    {:ok, token, _expiration} = Auth.issue_token(user)
+    {:ok, _table} = GameSimulator.Tables.start(user)
+
+    response =
+      conn(:get, "/api/table/extract?n=5")
+      |> put_req_header("authorization", "Bearer #{token}")
+      |> then(&Endpoint.call(&1, Endpoint.init([])))
+
+    assert response.status == 200
+    assert %{"count" => 0, "format" => "markdown", "text" => text} = Poison.decode!(response.resp_body)
+    assert text =~ "Export table NL2"
+  end
 end

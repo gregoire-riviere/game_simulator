@@ -27,10 +27,12 @@ defmodule Poker.Game do
   def init(options) do
     small_blind = Keyword.get(options, :small_blind)
     big_blind = Keyword.get(options, :big_blind)
+    mode = Keyword.get(options, :mode, :elimination)
 
-    if is_integer(small_blind) and is_integer(big_blind) and small_blind > 0 and big_blind > small_blind do
+    if is_integer(small_blind) and is_integer(big_blind) and small_blind > 0 and big_blind > small_blind and mode in [:elimination] do
       {:ok,
        %{
+         mode: mode, # V1 explicite : les joueurs bustés ne recavent pas automatiquement.
          players: %{}, # Joueurs assis, indexés par leur identifiant.
          small_blind: small_blind, # Montant de la small blind de la table.
          big_blind: big_blind, # Montant de la big blind de la table.
@@ -43,9 +45,12 @@ defmodule Poker.Game do
          folded: MapSet.new(), # Joueurs ayant abandonné la main courante.
          all_in: MapSet.new(), # Joueurs sans jeton restant dans la main.
          pending: MapSet.new(), # Joueurs qui doivent encore agir dans cette rue.
+         raise_blocked: MapSet.new(), # Joueurs autorisés à payer un all-in incomplet, sans relancer.
          leaving: MapSet.new(), # Joueurs à retirer après le règlement de la main.
          street_contributions: %{}, # Jetons engagés dans la rue courante.
          hand_contributions: %{}, # Jetons engagés depuis le début de la main.
+         hand_starting_stacks: %{}, # Stacks au début de la main, utilisés par l'export.
+         current_hand_actions: [], # Journal complet des actions de la main courante.
          current_bet: 0, # Plus grande contribution à égaler dans la rue.
          min_raise: big_blind, # Écart minimal requis pour une relance.
          preflop_aggressor: nil, # Dernier relanceur préflop, utilisé uniquement dans le contexte de décision.
@@ -54,7 +59,7 @@ defmodule Poker.Game do
          history: [] # Cinquante dernières mains, de la plus récente à la plus ancienne.
        }}
     else
-      {:stop, :invalid_blinds}
+      {:stop, :invalid_options}
     end
   end
 
@@ -113,8 +118,11 @@ defmodule Poker.Game do
       state.active_player != id -> {:reply, {:error, :not_your_turn}, state}
       not Map.has_key?(state.players, id) -> {:reply, {:error, :unknown_player}, state}
       true ->
+        before = state
+
         case apply_action(state, id, action) do
           {:ok, state} ->
+            state = record_action_detail(state, before, id, action)
             state = advance_after_action(state, id)
             {:reply, {:ok, public_snapshot(state, id)}, state}
 
@@ -180,9 +188,12 @@ defmodule Poker.Game do
           folded: MapSet.new(),
           all_in: MapSet.new(),
           pending: MapSet.new(ids),
+          raise_blocked: MapSet.new(),
           leaving: MapSet.new(),
           street_contributions: Map.new(ids, &{&1, 0}),
           hand_contributions: Map.new(ids, &{&1, 0}),
+          hand_starting_stacks: Map.new(ids, &{&1, Map.fetch!(state.players, &1).stack}),
+          current_hand_actions: [],
           current_bet: 0,
           min_raise: state.big_blind,
           preflop_aggressor: nil,
@@ -211,7 +222,9 @@ defmodule Poker.Game do
   def post_blind(state, id, amount) do
     player = Map.fetch!(state.players, id)
     committed = min(amount, player.stack)
+    before = state
     state = commit(state, id, committed)
+    state = record_action_detail(state, before, id, if(amount == state.small_blind, do: :small_blind, else: :big_blind))
     if Map.fetch!(state.players, id).stack == 0, do: %{state | all_in: MapSet.put(state.all_in, id)}, else: state
   end
 
@@ -226,7 +239,7 @@ defmodule Poker.Game do
     cond do
       player.stack == 0 -> []
       state.current_bet == 0 and player.stack >= state.big_blind -> [%{bet: %{min: state.big_blind, max: player.stack}} | base]
-      state.current_bet > 0 and player.stack + Map.fetch!(state.street_contributions, id) >= state.current_bet + state.min_raise ->
+      state.current_bet > 0 and not MapSet.member?(state.raise_blocked, id) and player.stack + Map.fetch!(state.street_contributions, id) >= state.current_bet + state.min_raise ->
         min_total = state.current_bet + state.min_raise
         max_total = player.stack + Map.fetch!(state.street_contributions, id)
         [%{raise_to: %{min: min_total, max: max_total}} | base]
@@ -284,14 +297,34 @@ defmodule Poker.Game do
       total <= state.current_bet -> {:error, :raise_too_small}
       raise_size < state.min_raise and amount != player.stack -> {:error, :raise_too_small}
       true ->
+        full_raise = raise_size >= state.min_raise
+        pending_before = state.pending
         state = commit(state, id, amount)
-        state = %{state | current_bet: total, min_raise: max(state.min_raise, raise_size)}
-        state = %{state | street_aggressor: id}
-        state = if state.phase == :preflop, do: %{state | preflop_aggressor: id}, else: state
-        state = %{state | pending: pending_players(state, MapSet.new([id]))}
+        state = %{state | current_bet: total, min_raise: if(full_raise, do: max(state.min_raise, raise_size), else: state.min_raise)}
+        state = if full_raise, do: %{state | street_aggressor: id}, else: state
+        state = if full_raise and state.phase == :preflop, do: %{state | preflop_aggressor: id}, else: state
+        state = update_pending_after_raise(state, id, pending_before, full_raise)
         state = if Map.fetch!(state.players, id).stack == 0, do: %{state | all_in: MapSet.put(state.all_in, id)}, else: state
         {:ok, state}
     end
+  end
+
+  def update_pending_after_raise(state, id, _pending_before, true) do
+    %{state | pending: pending_players(state, MapSet.new([id])), raise_blocked: MapSet.new()}
+  end
+
+  def update_pending_after_raise(state, id, pending_before, false) do
+    candidates =
+      state.hand_players
+      |> MapSet.difference(state.folded)
+      |> MapSet.difference(state.all_in)
+      |> MapSet.delete(id)
+      |> Enum.filter(&(Map.fetch!(state.street_contributions, &1) < state.current_bet))
+      |> MapSet.new()
+
+    # Un tapis inférieur au min-raise permet de payer le complément, mais ne rouvre pas la relance.
+    blocked = MapSet.difference(candidates, MapSet.delete(pending_before, id))
+    %{state | pending: candidates, raise_blocked: MapSet.union(state.raise_blocked, blocked)}
   end
 
   def commit_and_finish(state, id, amount) do
@@ -308,11 +341,38 @@ defmodule Poker.Game do
     %{state | players: players, street_contributions: street, hand_contributions: hand, current_bet: max(state.current_bet, Map.fetch!(street, id))}
   end
 
+  def record_action_detail(state, before, id, action) do
+    before_player = Map.fetch!(before.players, id)
+    after_player = Map.fetch!(state.players, id)
+    before_street = Map.get(before.street_contributions, id, 0)
+    after_street = Map.get(state.street_contributions, id, 0)
+
+    # Chaque ligne garde les stacks et pots avant/après pour permettre une analyse externe exhaustive.
+    entry = %{
+      street: before.phase,
+      player: id,
+      action: action_label(action),
+      amount: max(after_street - before_street, 0),
+      stack_before: before_player.stack,
+      stack_after: after_player.stack,
+      contribution_before: Map.get(before.hand_contributions, id, 0),
+      contribution_after: Map.get(state.hand_contributions, id, 0),
+      pot_before: Enum.sum(Map.values(before.hand_contributions)),
+      pot_after: Enum.sum(Map.values(state.hand_contributions))
+    }
+
+    %{state | current_hand_actions: state.current_hand_actions ++ [entry]}
+  end
+
+  def action_label({:bet, amount}), do: "bet #{amount}"
+  def action_label({:raise_to, amount}), do: "raise_to #{amount}"
+  def action_label(action), do: Atom.to_string(action)
+
   def fold_player(state, id) do
     %{state | folded: MapSet.put(state.folded, id), pending: MapSet.delete(state.pending, id)}
   end
 
-  def remove_pending(state, id), do: %{state | pending: MapSet.delete(state.pending, id)}
+  def remove_pending(state, id), do: %{state | pending: MapSet.delete(state.pending, id), raise_blocked: MapSet.delete(state.raise_blocked, id)}
 
   def advance_after_action(state, id) do
     remaining = active_ids(state)
@@ -346,6 +406,7 @@ defmodule Poker.Game do
         min_raise: state.big_blind,
         street_aggressor: nil,
         pending: pending,
+        raise_blocked: MapSet.new(),
         active_player: nil
       }
 
@@ -382,12 +443,27 @@ defmodule Poker.Game do
         payout = Map.get(payouts, id, 0)
         {id,
          %{
+           seat: Map.fetch!(state.players, id).seat,
+           starting_stack: Map.fetch!(state.hand_starting_stacks, id),
+           final_stack: Map.fetch!(state.players, id).stack,
+           cards: Map.fetch!(state.hole_cards, id),
+           contribution: contribution,
+           payout: payout,
            profit_loss: payout - contribution,
            result: historical_result(state, id)
          }}
       end)
 
-    hand = %{dealer: state.dealer, board: state.board, players: players, winners: Map.keys(payouts)}
+    hand = %{
+      dealer: state.dealer,
+      board: state.board,
+      players: players,
+      winners: Map.keys(payouts),
+      actions: state.current_hand_actions,
+      small_blind: state.small_blind,
+      big_blind: state.big_blind
+    }
+
     %{state | history: Enum.take([hand | state.history], 50)}
   end
 
@@ -423,9 +499,12 @@ defmodule Poker.Game do
         folded: MapSet.new(),
         all_in: MapSet.new(),
         pending: MapSet.new(),
+        raise_blocked: MapSet.new(),
         leaving: MapSet.new(),
         street_contributions: %{},
         hand_contributions: %{},
+        hand_starting_stacks: %{},
+        current_hand_actions: [],
         current_bet: 0,
         preflop_aggressor: nil,
         street_aggressor: nil,
@@ -487,6 +566,7 @@ defmodule Poker.Game do
 
     %{
       phase: state.phase,
+      mode: state.mode,
       dealer: state.dealer,
       board: state.board,
       pot: Enum.sum(Map.values(state.hand_contributions)),
@@ -509,12 +589,43 @@ defmodule Poker.Game do
       stack: player.stack,
       position: position_for(state, id),
       to_call: state.current_bet - contribution,
+      pot_odds: pot_odds(state, contribution),
+      bet_size_ratio: bet_size_ratio(state, contribution),
+      stack_pressure: stack_pressure(state, player, contribution),
+      effective_stack: effective_stack(state, id),
       current_bet: state.current_bet,
       big_blind: state.big_blind,
       players_in_hand: length(active_ids(state)),
       facing_cbet: state.phase != :preflop and state.current_bet > 0 and state.street_aggressor == state.preflop_aggressor,
       actions: actions_for(state, id)
     }
+  end
+
+  def pot_odds(state, contribution) do
+    to_call = state.current_bet - contribution
+    if to_call > 0, do: to_call / (Enum.sum(Map.values(state.hand_contributions)) + to_call), else: 0.0
+  end
+
+  def bet_size_ratio(state, contribution) do
+    pot = Enum.sum(Map.values(state.hand_contributions))
+    to_call = state.current_bet - contribution
+    if pot > 0 and to_call > 0, do: to_call / pot, else: 0.0
+  end
+
+  def stack_pressure(state, player, contribution) do
+    to_call = state.current_bet - contribution
+    if player.stack > 0 and to_call > 0, do: to_call / player.stack, else: 0.0
+  end
+
+  def effective_stack(state, id) do
+    player_stack = Map.fetch!(state.players, id).stack
+
+    state.hand_players
+    |> MapSet.delete(id)
+    |> Enum.reject(&MapSet.member?(state.folded, &1))
+    |> Enum.map(&Map.fetch!(state.players, &1).stack)
+    |> Enum.max(fn -> 0 end)
+    |> min(player_stack)
   end
 
   def position_for(state, id) do

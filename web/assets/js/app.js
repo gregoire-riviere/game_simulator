@@ -19,6 +19,11 @@ const pot = document.getElementById("pot");
 const actionPanel = document.getElementById("action-panel");
 const recentActions = document.getElementById("recent-actions");
 const leaveTableButton = document.getElementById("leave-table-button");
+const extractCount = document.getElementById("extract-count");
+const extractButton = document.getElementById("extract-button");
+const extractPanel = document.getElementById("extract-panel");
+const extractOutput = document.getElementById("extract-output");
+const copyExtractButton = document.getElementById("copy-extract-button");
 const handResult = document.getElementById("hand-result");
 const handResultReason = document.getElementById("hand-result-reason");
 const handResultWinners = document.getElementById("hand-result-winners");
@@ -249,6 +254,33 @@ async function leaveTable() {
   }
 }
 
+async function extractHands() {
+  extractButton.disabled = true;
+
+  try {
+    const count = Math.min(Math.max(Number(extractCount.value || 10), 1), 50);
+    extractCount.value = count;
+    const extract = await api(`/api/table/extract?n=${count}`);
+    extractOutput.value = extract.text;
+    extractPanel.hidden = false;
+  } catch (_error) {
+    tableStatus.textContent = "Impossible de générer l’extract.";
+  } finally {
+    extractButton.disabled = false;
+  }
+}
+
+async function copyExtract() {
+  try {
+    await navigator.clipboard.writeText(extractOutput.value);
+    tableStatus.textContent = "Extract copié.";
+  } catch (_error) {
+    extractOutput.select();
+    document.execCommand("copy");
+    tableStatus.textContent = "Extract copié.";
+  }
+}
+
 async function logout() {
   try {
     await api("/api/auth/logout", { method: "POST", body: "{}" });
@@ -296,6 +328,8 @@ newTableButton.addEventListener("click", async () => {
 });
 
 leaveTableButton.addEventListener("click", leaveTable);
+extractButton.addEventListener("click", extractHands);
+copyExtractButton.addEventListener("click", copyExtract);
 logoutButton.addEventListener("click", logout);
 
 restoreSession();

@@ -16,6 +16,12 @@ defmodule Poker.GameTest do
     assert :check in actions
   end
 
+  test "starts in explicit elimination mode" do
+    {:ok, game} = Poker.Game.start_link(small_blind: 1, big_blind: 2)
+
+    assert Poker.Game.internal_state(game).mode == :elimination
+  end
+
   test "hides opponent hole cards and awards a folded pot" do
     {:ok, game} = Poker.Game.start_link(small_blind: 1, big_blind: 2)
     {:ok, _player} = Poker.Game.join(game, :alice, 100, 1)
@@ -34,8 +40,10 @@ defmodule Poker.GameTest do
 
     assert {:ok, [hand]} = Poker.Game.history(game, 2)
     assert hand.winners == [:bob]
-    assert hand.players.alice == %{profit_loss: -1, result: :folded}
-    assert hand.players.bob == %{profit_loss: 1, result: :won_by_fold}
+    assert %{profit_loss: -1, result: :folded, contribution: 1, payout: 0, final_stack: 99} = hand.players.alice
+    assert %{profit_loss: 1, result: :won_by_fold, contribution: 2, payout: 3, final_stack: 101} = hand.players.bob
+    assert length(hand.players.alice.cards) == 2
+    assert Enum.map(hand.actions, & &1.action) == ["small_blind", "big_blind", "fold"]
     assert {:error, :invalid_history_count} = Poker.Game.history(game, 0)
   end
 

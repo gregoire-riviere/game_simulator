@@ -84,6 +84,20 @@ defmodule GameSimulatorWeb.Endpoint do
     end)
   end
 
+  get "/api/table/extract" do
+    authenticated(conn, fn conn, user ->
+      conn = Plug.Conn.fetch_query_params(conn)
+
+      with {:ok, table} <- table_for(user),
+           {:ok, count} <- parse_count(conn.query_params["n"]),
+           {:ok, extract} <- GameSimulator.Table.extract(table, user, count) do
+        send_json(conn, 200, extract)
+      else
+        {:error, reason} -> table_error(conn, reason)
+      end
+    end)
+  end
+
   post "/api/table/action" do
     # Les montants bruts du navigateur sont toujours revalidés par `Poker.Game`.
     authenticated(conn, fn conn, user ->
@@ -177,6 +191,17 @@ defmodule GameSimulatorWeb.Endpoint do
   def parse_action(%{"action" => "bet", "amount" => amount}) when is_integer(amount) and amount > 0, do: {:ok, {:bet, amount}}
   def parse_action(%{"action" => "raise_to", "amount" => amount}) when is_integer(amount) and amount > 0, do: {:ok, {:raise_to, amount}}
   def parse_action(_params), do: {:error, :invalid_action}
+
+  def parse_count(nil), do: {:ok, 10}
+
+  def parse_count(value) when is_binary(value) do
+    case Integer.parse(value) do
+      {count, ""} when count in 1..50 -> {:ok, count}
+      _other -> {:error, :invalid_extract_count}
+    end
+  end
+
+  def parse_count(_value), do: {:error, :invalid_extract_count}
 
   def table_error(conn, :table_not_found), do: send_json(conn, 404, %{error: "table_not_found"})
   def table_error(conn, :forbidden), do: send_json(conn, 403, %{error: "forbidden"})

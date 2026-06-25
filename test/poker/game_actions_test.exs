@@ -105,6 +105,22 @@ defmodule Poker.GameActionsTest do
     assert state.active_player == :villain
   end
 
+  test "does not reopen raises to players who already acted after an incomplete all-in raise" do
+    {:ok, game} = three_player_under_raise_game()
+
+    assert {:ok, _snapshot} = Poker.Game.act(game, :short, :all_in)
+    state = Poker.Game.internal_state(game)
+    assert state.current_bet == 15
+    assert state.min_raise == 10
+    assert state.active_player == :third
+
+    assert {:ok, _snapshot} = Poker.Game.act(game, :third, :call)
+    assert {:ok, %{player_id: :hero, actions: actions}} = Poker.Game.next_action(game)
+    assert :call in actions
+    assert :fold in actions
+    refute Enum.any?(actions, &match?(%{raise_to: _}, &1))
+  end
+
   test "rejects actions that are not legal in the current betting state" do
     {:ok, facing_bet} = game_with_hero_to_act(current_bet: 10, hero_street: 2, hero_stack: 98)
     assert {:error, :cannot_check} = Poker.Game.act(facing_bet, :hero, :check)
@@ -169,6 +185,40 @@ defmodule Poker.GameActionsTest do
         dealer: :hero,
         preflop_aggressor: Keyword.get(options, :preflop_aggressor),
         street_aggressor: Keyword.get(options, :street_aggressor)
+      }
+    end)
+
+    {:ok, game}
+  end
+
+  def three_player_under_raise_game do
+    {:ok, game} = Poker.Game.start_link(small_blind: 1, big_blind: 2)
+    {:ok, _player} = Poker.Game.join(game, :hero, 100, 1)
+    {:ok, _player} = Poker.Game.join(game, :short, 100, 2)
+    {:ok, _player} = Poker.Game.join(game, :third, 100, 3)
+    {:ok, _state} = Poker.Game.start_hand(game)
+
+    :sys.replace_state(game, fn state ->
+      %{
+        state |
+        phase: :flop,
+        board: [{"A", "clubs"}, {"7", "diamonds"}, {"2", "spades"}],
+        players: %{
+          hero: %{id: :hero, seat: 1, stack: 90},
+          short: %{id: :short, seat: 2, stack: 5},
+          third: %{id: :third, seat: 3, stack: 100}
+        },
+        hand_players: MapSet.new([:hero, :short, :third]),
+        folded: MapSet.new(),
+        all_in: MapSet.new(),
+        pending: MapSet.new([:short, :third]),
+        raise_blocked: MapSet.new(),
+        street_contributions: %{hero: 10, short: 10, third: 0},
+        hand_contributions: %{hero: 10, short: 10, third: 0},
+        current_bet: 10,
+        min_raise: 10,
+        active_player: :short,
+        dealer: :hero
       }
     end)
 
