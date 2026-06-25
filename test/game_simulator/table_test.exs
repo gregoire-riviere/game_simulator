@@ -32,4 +32,38 @@ defmodule GameSimulator.TableTest do
 
     assert {:error, :hero_busted} = GameSimulator.Table.next_hand(table, "alice")
   end
+
+  test "keeps a busted bot profile when that bot did not play the last hand" do
+    {:ok, table} = GameSimulator.Table.start_link(owner: "alice")
+    state = :sys.get_state(table)
+    busted_bot = {:bot, 1}
+
+    :sys.replace_state(state.game, fn game ->
+      players = Map.delete(game.players, busted_bot)
+
+      hand = %{
+        dealer: state.human_id,
+        board: [],
+        winners: [state.human_id],
+        players: Map.new(players, fn {id, _player} -> {id, %{profit_loss: 0, result: :folded}} end)
+      }
+
+      %{game | history: [hand], phase: :waiting}
+    end)
+
+    updated = GameSimulator.Table.update_profiles(state, %{phase: :waiting})
+
+    assert Map.fetch!(updated.profiles, busted_bot) == Map.fetch!(state.profiles, busted_bot)
+  end
+
+  test "supervised tables are temporary and do not restart as fresh tables after a crash" do
+    owner = "crash-user-#{System.unique_integer([:positive])}"
+    {:ok, table} = GameSimulator.Tables.start(owner)
+    monitor = Process.monitor(table)
+
+    Process.exit(table, :kill)
+
+    assert_receive {:DOWN, ^monitor, :process, ^table, :killed}, 1_000
+    assert :error = GameSimulator.Tables.table(owner)
+  end
 end

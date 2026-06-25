@@ -8,6 +8,15 @@ defmodule GameSimulator.Table do
 
   use GenServer
 
+  def child_spec(options) do
+    %{
+      id: __MODULE__,
+      start: {__MODULE__, :start_link, [options]},
+      restart: :temporary,
+      type: :worker
+    }
+  end
+
   def start_link(options) do
     name = Keyword.get(options, :name)
     GenServer.start_link(__MODULE__, options, if(name, do: [name: name], else: []))
@@ -112,28 +121,39 @@ defmodule GameSimulator.Table do
 
     profiles =
       Map.new(state.profiles, fn {id, profile} ->
-        result = Map.fetch!(hand.players, id)
-        tilt = max(profile.memory.current_tilt * 0.95, 0.0)
-        big_loss = result.profit_loss <= -40
-        big_win = result.profit_loss >= 40
-        tilt = if big_loss, do: min(1.0, tilt + 0.15), else: tilt
-        tilt = if big_win, do: max(0.0, tilt - 0.10), else: tilt
+        case Map.fetch(hand.players, id) do
+          {:ok, result} -> {id, update_profile_memory(profile, result)}
 
-        memory = %{
-          profile.memory |
-          current_tilt: tilt,
-          hands_since_big_loss: if(big_loss, do: 0, else: profile.memory.hands_since_big_loss + 1),
-          lost_buyins: profile.memory.lost_buyins + if(big_loss, do: 1, else: 0),
-          won_big_pot_recently: big_win
-        }
-
-        {id, %{profile | memory: memory}}
+          :error ->
+            # Un PNJ à 0 jeton ne participe plus aux mains suivantes.
+            # Il garde donc sa mémoire telle quelle au lieu de faire crasher la table.
+            {id, profile}
+        end
       end)
 
     %{state | profiles: profiles}
   end
 
   def update_profiles(state, _game_state), do: state
+
+  def update_profile_memory(profile, result) do
+    # Le tilt diminue lentement, puis bouge selon les gros pots gagnés ou perdus.
+    tilt = max(profile.memory.current_tilt * 0.95, 0.0)
+    big_loss = result.profit_loss <= -40
+    big_win = result.profit_loss >= 40
+    tilt = if big_loss, do: min(1.0, tilt + 0.15), else: tilt
+    tilt = if big_win, do: max(0.0, tilt - 0.10), else: tilt
+
+    memory = %{
+      profile.memory |
+      current_tilt: tilt,
+      hands_since_big_loss: if(big_loss, do: 0, else: profile.memory.hands_since_big_loss + 1),
+      lost_buyins: profile.memory.lost_buyins + if(big_loss, do: 1, else: 0),
+      won_big_pot_recently: big_win
+    }
+
+    %{profile | memory: memory}
+  end
 
   def public_state(state, owner) do
     {:ok, snapshot} = Poker.Game.public_state(state.game, state.human_id)
