@@ -43,6 +43,33 @@ defmodule Poker.DecisionTest do
     assert Poker.Decision.hand_strength_category(:board_pair) == :air
   end
 
+  test "does not overvalue made hands mostly carried by the board" do
+    assert Poker.Decision.made_hand_category([{"A", "clubs"}, {"K", "hearts"}], [{"9", "clubs"}, {"9", "diamonds"}, {"9", "spades"}]) == :board_trips
+
+    assert Poker.Decision.made_hand_category(
+             [{"A", "clubs"}, {"K", "hearts"}],
+             [{"9", "clubs"}, {"9", "diamonds"}, {"9", "spades"}, {"2", "clubs"}, {"2", "diamonds"}]
+           ) == :plays_board
+
+    assert Poker.Decision.made_hand_category(
+             [{"A", "clubs"}, {"K", "hearts"}],
+             [{"9", "clubs"}, {"9", "diamonds"}, {"9", "spades"}, {"9", "hearts"}, {"2", "diamonds"}]
+           ) == :board_quads
+
+    assert Poker.Decision.made_hand_category(
+             [{"A", "clubs"}, {"K", "hearts"}],
+             [{"10", "clubs"}, {"J", "diamonds"}, {"Q", "spades"}, {"2", "clubs"}, {"3", "diamonds"}]
+           ) == :straight
+
+    assert Poker.Decision.made_hand_category(
+             [{"7", "clubs"}, {"8", "hearts"}],
+             [{"10", "clubs"}, {"J", "diamonds"}, {"Q", "spades"}, {"K", "clubs"}, {"A", "diamonds"}]
+           ) == :plays_board
+
+    assert Poker.Decision.hand_strength_category(:plays_board) == :air
+    assert Poker.Decision.hand_strength_category(:board_quads) == :strong
+  end
+
   test "preflop situation and call chance react to all-in pressure" do
     profile = %{Poker.Profile.new(1) | archetype: :tag, call_too_wide: false}
     cheap = %{pot_odds: 0.10, bet_size_ratio: 0.10, stack_pressure: 0.05}

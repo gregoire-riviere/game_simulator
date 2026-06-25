@@ -120,11 +120,31 @@ function renderPlayers(players) {
   });
 }
 
-function actionButton(label, action, disabled = false) {
+function actionMeta(action) {
+  const key = typeof action === "string" ? action : action?.action || "next";
+
+  return {
+    fold: { label: "Coucher", icon: "×", tone: "fold" },
+    check: { label: "Check", icon: "✓", tone: "check" },
+    call: { label: "Suivre", icon: "=", tone: "call" },
+    all_in: { label: "Tapis", icon: "!", tone: "all-in" },
+    bet: { label: "Miser", icon: "+", tone: "bet" },
+    raise_to: { label: "Relancer", icon: "↑", tone: "raise" },
+    next: { label: "Main suivante", icon: "→", tone: "next" }
+  }[key] || { label: key, icon: "•", tone: "neutral" };
+}
+
+function actionButton(meta, action, disabled = false) {
   const button = document.createElement("button");
-  button.className = "table-action";
-  button.textContent = label;
+  button.className = `table-action table-action-${meta.tone}`;
   button.disabled = disabled;
+  const icon = document.createElement("span");
+  icon.className = "action-icon";
+  icon.setAttribute("aria-hidden", "true");
+  icon.textContent = meta.icon;
+  const text = document.createElement("span");
+  text.textContent = meta.label;
+  button.append(icon, text);
   if (action !== null) button.addEventListener("click", () => submitAction(action));
   return button;
 }
@@ -134,7 +154,7 @@ function renderActions() {
   actionPanel.replaceChildren();
 
   if (table.hand_finished) {
-    const button = actionButton("Main suivante", null);
+    const button = actionButton(actionMeta({ action: "next" }), null);
     button.onclick = () => nextHand();
     actionPanel.append(button);
     return;
@@ -147,20 +167,23 @@ function renderActions() {
 
   table.actions.forEach((action) => {
     if (typeof action === "string") {
-      actionPanel.append(actionButton(action === "all_in" ? "Tapis" : action, { action }));
+      actionPanel.append(actionButton(actionMeta(action), { action }));
       return;
     }
 
     const [type, limits] = Object.entries(action)[0];
+    const control = document.createElement("div");
+    control.className = "bet-control";
     const input = document.createElement("input");
     input.type = "number";
     input.min = limits.min;
     input.max = limits.max;
     input.value = limits.min;
     input.className = "bet-input";
-    const button = actionButton(type === "bet" ? "Miser" : "Relancer", null);
+    const button = actionButton(actionMeta({ action: type }), null);
     button.onclick = () => submitAction({ action: type, amount: Number(input.value) });
-    actionPanel.append(input, button);
+    control.append(input, button);
+    actionPanel.append(control);
   });
 }
 

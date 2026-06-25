@@ -277,11 +277,22 @@ defmodule Poker.Decision do
 
   def made_hand_category(hole_cards, board) do
     value = Poker.best_hand(hole_cards ++ board)
+    board_value = if length(board) >= 5, do: Poker.best_hand(board), else: nil
     hole_ranks = Enum.map(hole_cards, fn {rank, _suit} -> Poker.rank_value(rank) end)
     board_ranks = Enum.map(board, fn {rank, _suit} -> Poker.rank_value(rank) end)
 
+    if board_value == value do
+      :plays_board
+    else
+      made_hand_from_value(value, hole_ranks, board_ranks)
+    end
+  end
+
+  def made_hand_from_value(value, hole_ranks, board_ranks) do
     case value do
-      {made, _, _, _, _, _} when made >= 6 -> :nuts
+      {8, _, _, _, _, _} -> :nuts
+      {7, quad, _, _, _, _} -> if(quad in hole_ranks, do: :nuts, else: :board_quads)
+      {6, trips, pair, _, _, _} -> if(trips in hole_ranks or pair in hole_ranks, do: :full_house, else: :plays_board)
       {5, _, _, _, _, _} -> :flush
       {4, _, _, _, _, _} -> :straight
       {3, trips, _, _, _, _} -> if(trips in hole_ranks, do: :set_or_trips, else: :board_trips)
@@ -317,8 +328,8 @@ defmodule Poker.Decision do
   def hand_strength_category(category) do
     case category do
       :nuts -> :nuts
-      category when category in [:flush, :straight, :set_or_trips] -> :very_strong
-      category when category in [:two_pair, :overpair, :top_pair_good_kicker] -> :strong
+      category when category in [:full_house, :flush, :straight, :set_or_trips] -> :very_strong
+      category when category in [:board_quads, :two_pair, :overpair, :top_pair_good_kicker] -> :strong
       category when category in [:top_pair_bad_kicker, :middle_pair, :bottom_pair, :board_trips, :board_two_pair] -> :medium
       _other -> :air
     end

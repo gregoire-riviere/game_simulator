@@ -118,7 +118,9 @@ defmodule Poker.GameActionsTest do
     assert {:ok, %{player_id: :hero, actions: actions}} = Poker.Game.next_action(game)
     assert :call in actions
     assert :fold in actions
+    refute :all_in in actions
     refute Enum.any?(actions, &match?(%{raise_to: _}, &1))
+    assert {:error, :raise_not_allowed} = Poker.Game.act(game, :hero, :all_in)
   end
 
   test "rejects actions that are not legal in the current betting state" do
@@ -206,15 +208,15 @@ defmodule Poker.GameActionsTest do
         players: %{
           hero: %{id: :hero, seat: 1, stack: 90},
           short: %{id: :short, seat: 2, stack: 5},
-          third: %{id: :third, seat: 3, stack: 100}
+          third: %{id: :third, seat: 3, stack: 90}
         },
         hand_players: MapSet.new([:hero, :short, :third]),
         folded: MapSet.new(),
         all_in: MapSet.new(),
-        pending: MapSet.new([:short, :third]),
+        pending: MapSet.new([:short]),
         raise_blocked: MapSet.new(),
-        street_contributions: %{hero: 10, short: 10, third: 0},
-        hand_contributions: %{hero: 10, short: 10, third: 0},
+        street_contributions: %{hero: 10, short: 10, third: 10},
+        hand_contributions: %{hero: 10, short: 10, third: 10},
         current_bet: 10,
         min_raise: 10,
         active_player: :short,

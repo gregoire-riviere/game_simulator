@@ -234,7 +234,8 @@ defmodule Poker.Game do
     to_call = state.current_bet - Map.fetch!(state.street_contributions, id)
     # Règle de tour d'enchères : sans mise à suivre, le joueur check ou mise.
     # Fold et call n'ont de sens que lorsqu'il existe déjà une mise adverse à payer.
-    base = if to_call == 0, do: [:check, :all_in], else: [:call, :fold, :all_in]
+    passive_actions = if to_call == 0, do: [:check], else: [:call, :fold]
+    base = if all_in_available?(state, id), do: passive_actions ++ [:all_in], else: passive_actions
 
     cond do
       player.stack == 0 -> []
@@ -246,6 +247,15 @@ defmodule Poker.Game do
 
       true -> base
     end
+  end
+
+  def all_in_available?(state, id) do
+    not (MapSet.member?(state.raise_blocked, id) and all_in_true_raise?(state, id))
+  end
+
+  def all_in_true_raise?(state, id) do
+    total = Map.fetch!(state.street_contributions, id) + Map.fetch!(state.players, id).stack
+    state.current_bet > 0 and total >= state.current_bet + state.min_raise
   end
 
   def apply_action(state, id, :fold) do
@@ -275,10 +285,10 @@ defmodule Poker.Game do
     player = Map.fetch!(state.players, id)
     total = Map.fetch!(state.street_contributions, id) + player.stack
 
-    if total <= state.current_bet do
-      {:ok, commit_and_finish(state, id, player.stack)}
-    else
-      raise_to(state, id, total)
+    cond do
+      MapSet.member?(state.raise_blocked, id) and all_in_true_raise?(state, id) -> {:error, :raise_not_allowed}
+      total <= state.current_bet -> {:ok, commit_and_finish(state, id, player.stack)}
+      true -> raise_to(state, id, total)
     end
   end
 
