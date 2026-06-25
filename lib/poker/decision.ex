@@ -25,6 +25,7 @@ defmodule Poker.Decision do
     cond do
       situation == :facing_all_in and in_top_percent?(context.cards, max(4, three_bet)) -> call_or_fold(profile, context, 0.55)
       situation == :facing_all_in -> fold_or_check(context)
+      situation == :facing_raise and premium_vs_large_preflop_raise?(profile, context) -> continue_premium_preflop(profile, context)
       situation == :facing_raise and in_top_percent?(context.cards, three_bet) and chance(three_bet_chance(profile) + tilt) -> raise_action(profile, context)
       situation == :facing_raise and in_top_percent?(context.cards, call_range) -> call_or_fold(profile, context, preflop_call_chance(profile, context))
       situation == :facing_limp and in_top_percent?(context.cards, pfr) and chance(0.75 + tilt) -> raise_action(profile, context)
@@ -42,6 +43,29 @@ defmodule Poker.Decision do
       context.current_bet > context.big_blind -> :facing_raise
       context.to_call > 0 -> :facing_limp
       true -> :no_raise_yet
+    end
+  end
+
+  def premium_vs_large_preflop_raise?(profile, context) do
+    premium_preflop_hand?(context.cards) and context.current_bet > context.big_blind * 25 and not ultra_deep_nit?(profile, context)
+  end
+
+  def premium_preflop_hand?(cards) do
+    normalize_hand(cards) in ["AA", "KK", "QQ", "AKs", "AKo"]
+  end
+
+  def ultra_deep_nit?(%{archetype: :nit_weak}, context) do
+    Map.get(context, :effective_stack, context.stack) > context.big_blind * 250
+  end
+
+  def ultra_deep_nit?(_profile, _context), do: false
+
+  def continue_premium_preflop(profile, context) do
+    cond do
+      Enum.any?(context.actions, &match?(%{raise_to: _}, &1)) and chance(three_bet_chance(profile)) -> raise_action(profile, context)
+      :call in context.actions -> :call
+      :all_in in context.actions -> :all_in
+      true -> fold_or_check(context)
     end
   end
 

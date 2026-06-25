@@ -81,6 +81,30 @@ defmodule Poker.DecisionTest do
     assert Poker.Decision.preflop_situation(%{to_call: 50, stack: 50, current_bet: 50, big_blind: 2}) == :facing_all_in
   end
 
+  test "does not fold QQ+ or AK against a large preflop raise" do
+    profile = %{Poker.Profile.new(1) | archetype: :tag, three_bet: 0}
+
+    context = %{
+      phase: :preflop,
+      cards: [{"A", "hearts"}, {"K", "clubs"}],
+      position: :button,
+      to_call: 52,
+      stack: 200,
+      effective_stack: 200,
+      current_bet: 54,
+      big_blind: 2,
+      pot: 80,
+      pot_odds: 0.35,
+      bet_size_ratio: 0.0,
+      stack_pressure: 0.26,
+      actions: [:call, :fold, %{raise_to: %{min: 90, max: 200}}, :all_in]
+    }
+
+    Enum.each(1..30, fn _attempt ->
+      refute Poker.Decision.preflop(profile, context) == :fold
+    end)
+  end
+
   test "river sanity guard discourages expensive weak calls and raises" do
     profile = %{Poker.Profile.new(1) | archetype: :tag}
     probabilities = %{raise: 0.10, call: 0.45, fold: 0.45}
