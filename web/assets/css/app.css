@@ -82,7 +82,9 @@ button:disabled { cursor: wait; opacity: .65; }
 .card.red { color: #b91c1c; }
 .hidden-card { color: #dbeafe; background: repeating-linear-gradient(45deg, #1d4ed8, #1d4ed8 .25rem, #172554 .25rem, #172554 .5rem); }
 .seat { position: absolute; display: grid; min-width: 7.5rem; gap: .15rem; padding: .55rem .65rem; border: 1px solid #ffffff2e; border-radius: .7rem; background: #0f172ae8; box-shadow: 0 .35rem .8rem #00000055; font-size: .78rem; }
+.seat-heading { display: flex; align-items: center; justify-content: space-between; gap: .4rem; }
 .seat strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.position-badge { flex: 0 0 auto; padding: .12rem .35rem; border-radius: 999px; color: #07111d; background: #fde68a; font-size: .62rem; font-weight: 900; }
 .seat-stack { color: #a5f3fc; }
 .seat-status { min-height: 1em; color: #fde68a; font-size: .68rem; }
 .seat.active { border-color: #facc15; box-shadow: 0 0 0 .15rem #facc1555; }

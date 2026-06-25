@@ -230,6 +230,8 @@ defmodule GameSimulator.Table do
           cards: cards(player.cards),
           folded: player.folded,
           contribution: player.contribution,
+          position: position_label(player.position),
+          dealer_button: id == snapshot.dealer,
           active: id == snapshot.active_player
         }
       end)
@@ -255,6 +257,13 @@ defmodule GameSimulator.Table do
 
   def public_id(state, id), do: if(id == state.human_id, do: "hero", else: "bot-#{elem(id, 1)}")
   def player_name(state, id), do: if(id == state.human_id, do: state.owner, else: Map.fetch!(state.profiles, id).name)
+  def position_label(:button), do: "BTN"
+  def position_label(:small_blind), do: "SB"
+  def position_label(:big_blind), do: "BB"
+  def position_label(:cutoff), do: "CO"
+  def position_label(:hijack), do: "HJ"
+  def position_label(:early), do: "UTG"
+  def position_label(_position), do: ""
   def last_result(_state, phase) when phase != :waiting, do: nil
 
   def last_result(state, :waiting) do
