@@ -19,6 +19,7 @@ const pot = document.getElementById("pot");
 const actionPanel = document.getElementById("action-panel");
 const recentActions = document.getElementById("recent-actions");
 const leaveTableButton = document.getElementById("leave-table-button");
+const resetTableButton = document.getElementById("reset-table-button");
 const extractCount = document.getElementById("extract-count");
 const extractButton = document.getElementById("extract-button");
 const extractPanel = document.getElementById("extract-panel");
@@ -265,15 +266,35 @@ async function nextHand() {
   }
 }
 
+function clearExtract() {
+  extractOutput.value = "";
+  extractPanel.hidden = true;
+}
+
 async function leaveTable() {
   try {
     await api("/api/table", { method: "DELETE" });
     clearTimeout(botTimer);
     table = null;
+    clearExtract();
     tableScreen.hidden = true;
     tableLobby.hidden = false;
   } catch (_error) {
     tableStatus.textContent = "Impossible de quitter la table.";
+  }
+}
+
+async function resetTable() {
+  resetTableButton.disabled = true;
+
+  try {
+    await api("/api/table", { method: "DELETE" });
+    clearExtract();
+    renderTable(await api("/api/table", { method: "POST", body: "{}" }));
+  } catch (_error) {
+    tableStatus.textContent = "Impossible de reset la table.";
+  } finally {
+    resetTableButton.disabled = false;
   }
 }
 
@@ -351,6 +372,7 @@ newTableButton.addEventListener("click", async () => {
 });
 
 leaveTableButton.addEventListener("click", leaveTable);
+resetTableButton.addEventListener("click", resetTable);
 extractButton.addEventListener("click", extractHands);
 copyExtractButton.addEventListener("click", copyExtract);
 logoutButton.addEventListener("click", logout);
