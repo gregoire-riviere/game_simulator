@@ -219,8 +219,9 @@ defmodule Poker.Game do
     # Le montant à suivre est la différence entre la mise la plus haute et celle du joueur.
     player = Map.fetch!(state.players, id)
     to_call = state.current_bet - Map.fetch!(state.street_contributions, id)
-    base = [:fold, :all_in]
-    base = if to_call == 0, do: [:check | base], else: [:call | base]
+    # Règle de tour d'enchères : sans mise à suivre, le joueur check ou mise.
+    # Fold et call n'ont de sens que lorsqu'il existe déjà une mise adverse à payer.
+    base = if to_call == 0, do: [:check, :all_in], else: [:call, :fold, :all_in]
 
     cond do
       player.stack == 0 -> []
@@ -234,7 +235,10 @@ defmodule Poker.Game do
     end
   end
 
-  def apply_action(state, id, :fold), do: {:ok, fold_player(state, id)}
+  def apply_action(state, id, :fold) do
+    # Au poker, se coucher répond à une mise adverse ; sans mise, l'action correcte est check.
+    if state.current_bet > Map.fetch!(state.street_contributions, id), do: {:ok, fold_player(state, id)}, else: {:error, :fold_not_allowed}
+  end
 
   def apply_action(state, id, :check) do
     if state.current_bet == Map.fetch!(state.street_contributions, id), do: {:ok, remove_pending(state, id)}, else: {:error, :cannot_check}

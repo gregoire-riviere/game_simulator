@@ -33,6 +33,57 @@ defmodule GameSimulator.TableTest do
     assert {:error, :hero_busted} = GameSimulator.Table.next_hand(table, "alice")
   end
 
+  test "exposes check and bet actions to the hero when poker rules say there is nothing to call" do
+    {:ok, table} = GameSimulator.Table.start_link(owner: "alice")
+    set_table_betting_state(table, current_bet: 0, hero_street: 0, hero_stack: 200, phase: :flop)
+
+    assert {:ok, state} = GameSimulator.Table.state(table, "alice")
+
+    assert state.hero_turn
+    assert :check in state.actions
+    assert :all_in in state.actions
+    assert %{bet: %{min: 2, max: 200}} in state.actions
+    refute :fold in state.actions
+    refute :call in state.actions
+  end
+
+  test "exposes fold call and raise actions to the hero when facing a bet" do
+    {:ok, table} = GameSimulator.Table.start_link(owner: "alice")
+    set_table_betting_state(table, current_bet: 10, hero_street: 2, hero_stack: 198, phase: :flop)
+
+    assert {:ok, state} = GameSimulator.Table.state(table, "alice")
+
+    assert state.hero_turn
+    assert :fold in state.actions
+    assert :call in state.actions
+    assert :all_in in state.actions
+    assert %{raise_to: %{min: 12, max: 200}} in state.actions
+    refute :check in state.actions
+  end
+
+  test "does not expose hero actions when a bot is active" do
+    {:ok, table} = GameSimulator.Table.start_link(owner: "alice")
+    table_state = :sys.get_state(table)
+
+    :sys.replace_state(table_state.game, fn game ->
+      bot = {:bot, 1}
+
+      %{
+        game |
+        active_player: bot,
+        pending: MapSet.new([bot]),
+        current_bet: 0,
+        street_contributions: Map.put(game.street_contributions, table_state.human_id, 0),
+        hand_contributions: Map.put(game.hand_contributions, table_state.human_id, 0)
+      }
+    end)
+
+    assert {:ok, state} = GameSimulator.Table.state(table, "alice")
+
+    refute state.hero_turn
+    assert state.actions == []
+  end
+
   test "keeps a busted bot profile when that bot did not play the last hand" do
     {:ok, table} = GameSimulator.Table.start_link(owner: "alice")
     state = :sys.get_state(table)
@@ -65,5 +116,42 @@ defmodule GameSimulator.TableTest do
 
     assert_receive {:DOWN, ^monitor, :process, ^table, :killed}, 1_000
     assert :error = GameSimulator.Tables.table(owner)
+  end
+
+  def set_table_betting_state(table, options) do
+    table_state = :sys.get_state(table)
+    hero = table_state.human_id
+    villain = {:bot, 1}
+
+    :sys.replace_state(table_state.game, fn game ->
+      current_bet = Keyword.fetch!(options, :current_bet)
+      hero_street = Keyword.fetch!(options, :hero_street)
+      hero_stack = Keyword.fetch!(options, :hero_stack)
+      villain_street = Keyword.get(options, :villain_street, current_bet)
+      villain_stack = Keyword.get(options, :villain_stack, 200 - villain_street)
+
+      %{
+        game |
+        phase: Keyword.fetch!(options, :phase),
+        players: %{
+          hero => %{id: hero, seat: 6, stack: hero_stack},
+          villain => %{id: villain, seat: 1, stack: villain_stack}
+        },
+        hole_cards: %{
+          hero => [{"A", "spades"}, {"K", "spades"}],
+          villain => [{"2", "clubs"}, {"7", "diamonds"}]
+        },
+        hand_players: MapSet.new([hero, villain]),
+        folded: MapSet.new(),
+        all_in: MapSet.new(),
+        pending: MapSet.new([hero]),
+        street_contributions: %{hero => hero_street, villain => villain_street},
+        hand_contributions: %{hero => hero_street, villain => villain_street},
+        current_bet: current_bet,
+        min_raise: 2,
+        active_player: hero,
+        dealer: villain
+      }
+    end)
   end
 end
