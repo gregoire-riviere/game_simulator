@@ -28,11 +28,15 @@ defmodule Poker.Game do
     small_blind = Keyword.get(options, :small_blind)
     big_blind = Keyword.get(options, :big_blind)
     mode = Keyword.get(options, :mode, :elimination)
+    top_up_to = Keyword.get(options, :top_up_to, 200)
+    min_stack = Keyword.get(options, :min_stack, 80)
 
-    if is_integer(small_blind) and is_integer(big_blind) and small_blind > 0 and big_blind > small_blind and mode in [:elimination] do
+    if is_integer(small_blind) and is_integer(big_blind) and small_blind > 0 and big_blind > small_blind and mode in [:elimination, :cash_nl2] and is_integer(min_stack) and is_integer(top_up_to) and min_stack >= 0 and top_up_to >= min_stack do
       {:ok,
        %{
-         mode: mode, # V1 explicite : les joueurs bustés ne recavent pas automatiquement.
+         mode: mode, # `:cash_nl2` recave les stacks trop courts avant la main suivante.
+         min_stack: min_stack,
+         top_up_to: top_up_to,
          players: %{}, # Joueurs assis, indexés par leur identifiant.
          small_blind: small_blind, # Montant de la small blind de la table.
          big_blind: big_blind, # Montant de la big blind de la table.
@@ -50,6 +54,7 @@ defmodule Poker.Game do
          street_contributions: %{}, # Jetons engagés dans la rue courante.
          hand_contributions: %{}, # Jetons engagés depuis le début de la main.
          hand_starting_stacks: %{}, # Stacks au début de la main, utilisés par l'export.
+         top_ups: %{}, # Recaves automatiques appliquées juste avant la main courante.
          current_hand_actions: [], # Journal complet des actions de la main courante.
          current_bet: 0, # Plus grande contribution à égaler dans la rue.
          min_raise: big_blind, # Écart minimal requis pour une relance.
@@ -162,6 +167,8 @@ defmodule Poker.Game do
   end
 
   def begin_hand(state) do
+    state = top_up_players(state)
+
     # Seuls les joueurs ayant des jetons peuvent recevoir des cartes pour cette main.
     ids =
       state.players
@@ -193,6 +200,7 @@ defmodule Poker.Game do
           street_contributions: Map.new(ids, &{&1, 0}),
           hand_contributions: Map.new(ids, &{&1, 0}),
           hand_starting_stacks: Map.new(ids, &{&1, Map.fetch!(state.players, &1).stack}),
+          top_ups: state.top_ups,
           current_hand_actions: [],
           current_bet: 0,
           min_raise: state.big_blind,
@@ -209,6 +217,20 @@ defmodule Poker.Game do
       {:ok, state}
     end
   end
+
+  def top_up_players(%{mode: :cash_nl2} = state) do
+    {players, top_ups} =
+      Enum.reduce(state.players, {%{}, %{}}, fn {id, player}, {players, top_ups} ->
+        new_stack = if player.stack < state.min_stack, do: state.top_up_to, else: player.stack
+        amount = new_stack - player.stack
+        top_ups = if amount > 0, do: Map.put(top_ups, id, amount), else: top_ups
+        {Map.put(players, id, %{player | stack: new_stack}), top_ups}
+      end)
+
+    %{state | players: players, top_ups: top_ups}
+  end
+
+  def top_up_players(state), do: %{state | top_ups: %{}}
 
   def blind_positions([dealer, other]), do: {dealer, other, dealer}
   def blind_positions([dealer, small_blind, big_blind]), do: {small_blind, big_blind, dealer}
@@ -514,6 +536,7 @@ defmodule Poker.Game do
         street_contributions: %{},
         hand_contributions: %{},
         hand_starting_stacks: %{},
+        top_ups: %{},
         current_hand_actions: [],
         current_bet: 0,
         preflop_aggressor: nil,
@@ -582,6 +605,7 @@ defmodule Poker.Game do
       dealer: state.dealer,
       board: state.board,
       pot: Enum.sum(Map.values(state.hand_contributions)),
+      top_ups: state.top_ups,
       players: players,
       active_player: state.active_player,
       small_blind: state.small_blind,

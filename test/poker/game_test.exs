@@ -22,6 +22,17 @@ defmodule Poker.GameTest do
     assert Poker.Game.internal_state(game).mode == :elimination
   end
 
+  test "tops up short stacks before a cash nl2 hand" do
+    {:ok, game} = Poker.Game.start_link(small_blind: 1, big_blind: 2, mode: :cash_nl2, min_stack: 80, top_up_to: 200)
+    assert {:ok, _player} = Poker.Game.join(game, :alice, 20, 1)
+    assert {:ok, _player} = Poker.Game.join(game, :bob, 200, 2)
+    assert {:ok, snapshot} = Poker.Game.start_hand(game)
+
+    assert snapshot.mode == :cash_nl2
+    assert snapshot.top_ups == %{alice: 180}
+    assert Poker.Game.internal_state(game).hand_starting_stacks.alice == 200
+  end
+
   test "hides opponent hole cards and awards a folded pot" do
     {:ok, game} = Poker.Game.start_link(small_blind: 1, big_blind: 2)
     {:ok, _player} = Poker.Game.join(game, :alice, 100, 1)

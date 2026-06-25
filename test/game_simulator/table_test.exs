@@ -6,7 +6,7 @@ defmodule GameSimulator.TableTest do
     assert {:ok, state} = GameSimulator.Table.state(table, "alice")
 
     assert length(state.players) == 6
-    assert state.mode == :elimination
+    assert state.mode == :cash_nl2
     assert length(Enum.find(state.players, &(&1.id == "hero")).cards) == 2
     assert Enum.all?(Enum.reject(state.players, &(&1.id == "hero")), &(&1.cards == :hidden))
     refute Map.has_key?(state, :profiles)
@@ -24,7 +24,7 @@ defmodule GameSimulator.TableTest do
   end
 
   test "does not start a new hand when the hero has no chips" do
-    {:ok, table} = GameSimulator.Table.start_link(owner: "alice")
+    {:ok, table} = GameSimulator.Table.start_link(owner: "alice", mode: :elimination)
     state = :sys.get_state(table)
 
     :sys.replace_state(state.game, fn game ->
@@ -32,6 +32,19 @@ defmodule GameSimulator.TableTest do
     end)
 
     assert {:error, :hero_busted} = GameSimulator.Table.next_hand(table, "alice")
+  end
+
+  test "shows automatic top-up in recent actions" do
+    {:ok, table} = GameSimulator.Table.start_link(owner: "alice")
+    state = :sys.get_state(table)
+
+    :sys.replace_state(state.game, fn game ->
+      players = Map.update!(game.players, state.human_id, &%{&1 | stack: 0})
+      %{game | players: players, phase: :waiting}
+    end)
+
+    assert {:ok, state} = GameSimulator.Table.next_hand(table, "alice")
+    assert %{player: "alice", action: "recave 200"} in state.recent_actions
   end
 
   test "exposes check and bet actions to the hero when poker rules say there is nothing to call" do

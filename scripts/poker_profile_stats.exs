@@ -86,13 +86,20 @@ defmodule PokerProfileStats do
       fold_to_cbet: 0,
       saw_flop: 0,
       wtsd: 0,
-      wmsd: 0
+      wmsd: 0,
+      river_air_opp: 0,
+      river_air_bet: 0,
+      river_air_raise: 0,
+      river_weak_big_call_opp: 0,
+      river_weak_big_call: 0,
+      river_non_strong_all_in: 0
     }
   end
 
   def collect_hand(stats, hand, ids) do
     preflop = analyze_preflop(hand.actions, hand.big_blind)
     postflop = analyze_postflop(hand, preflop)
+    river = analyze_river_punts(hand)
 
     Enum.reduce(ids, stats, fn id, stats ->
       if Map.has_key?(hand.players, id) do
@@ -114,6 +121,12 @@ defmodule PokerProfileStats do
           |> inc(:saw_flop, saw_flop?(hand, preflop, id))
           |> inc(:wtsd, showdown?(hand, result))
           |> inc(:wmsd, showdown?(hand, result) and result.profit_loss > 0)
+          |> inc(:river_air_opp, MapSet.member?(river.air_opp, id))
+          |> inc(:river_air_bet, MapSet.member?(river.air_bet, id))
+          |> inc(:river_air_raise, MapSet.member?(river.air_raise, id))
+          |> inc(:river_weak_big_call_opp, MapSet.member?(river.weak_big_call_opp, id))
+          |> inc(:river_weak_big_call, MapSet.member?(river.weak_big_call, id))
+          |> inc(:river_non_strong_all_in, MapSet.member?(river.non_strong_all_in, id))
         end)
       else
         stats
@@ -255,6 +268,31 @@ defmodule PokerProfileStats do
     |> MapSet.new()
   end
 
+  def analyze_river_punts(%{board: board} = hand) when length(board) == 5 do
+    hand.actions
+    |> Enum.filter(&(&1.street == :river))
+    |> Enum.reduce(%{air_opp: MapSet.new(), air_bet: MapSet.new(), air_raise: MapSet.new(), weak_big_call_opp: MapSet.new(), weak_big_call: MapSet.new(), non_strong_all_in: MapSet.new()}, fn action, stats ->
+      category = river_strength(hand, action.player)
+      weak_categories = [:air, :ace_high, :medium]
+      big_call = action.action == "call" and action.pot_before > 0 and action.amount / action.pot_before >= 0.75 and category in weak_categories
+      stats = if category == :air, do: %{stats | air_opp: MapSet.put(stats.air_opp, action.player)}, else: stats
+      stats = if category == :air and action.amount > 0 and String.starts_with?(action.action, "bet"), do: %{stats | air_bet: MapSet.put(stats.air_bet, action.player)}, else: stats
+      stats = if category == :air and action.amount > 0 and String.starts_with?(action.action, "raise_to"), do: %{stats | air_raise: MapSet.put(stats.air_raise, action.player)}, else: stats
+      stats = if category in weak_categories and action.action in ["call", "fold"], do: %{stats | weak_big_call_opp: MapSet.put(stats.weak_big_call_opp, action.player)}, else: stats
+      stats = if big_call, do: %{stats | weak_big_call: MapSet.put(stats.weak_big_call, action.player)}, else: stats
+      if action.action == "all_in" and category in [:air, :ace_high, :medium, :strong], do: %{stats | non_strong_all_in: MapSet.put(stats.non_strong_all_in, action.player)}, else: stats
+    end)
+  end
+
+  def analyze_river_punts(_hand) do
+    %{air_opp: MapSet.new(), air_bet: MapSet.new(), air_raise: MapSet.new(), weak_big_call_opp: MapSet.new(), weak_big_call: MapSet.new(), non_strong_all_in: MapSet.new()}
+  end
+
+  def river_strength(hand, id) do
+    cards = Map.fetch!(hand.players, id).cards
+    cards |> Poker.Decision.made_hand_category(hand.board) |> Poker.Decision.hand_strength_category()
+  end
+
   def showdown?(hand, result), do: length(hand.board) == 5 and result.result != :folded
   def saw_flop?(hand, preflop, id), do: length(hand.board) >= 3 and not MapSet.member?(preflop.folded, id)
 
@@ -264,15 +302,15 @@ defmodule PokerProfileStats do
     IO.puts("Hands simulated: #{hands}")
     IO.puts("Blinds: 1/2, stack reset to 200 between hands, six PNJ and no hero.")
     IO.puts("")
-    IO.puts("| Seat | Archetype | VPIP | PFR | Limp | 3bet | 3bet opp | Fold PF | C-bet | Fold vs C-bet | WTSD | W$SD | Hands |")
-    IO.puts("| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |")
+    IO.puts("| Seat | Archetype | VPIP | PFR | Limp | 3bet | 3bet opp | Fold PF | C-bet | Fold vs C-bet | WTSD | W$SD | River air bet | River air raise | Weak big call | Non-strong all-in | Hands |")
+    IO.puts("| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |")
 
     stats
     |> Enum.sort_by(fn {{:bot, seat}, _stats} -> seat end)
     |> Enum.each(fn {id, player_stats} ->
       profile = Map.fetch!(profiles_by_id, id)
 
-      IO.puts("| #{elem(id, 1)} | #{profile.archetype} | #{pct(player_stats.vpip, player_stats.hands)} | #{pct(player_stats.pfr, player_stats.hands)} | #{pct(player_stats.limp, player_stats.hands)} | #{pct(player_stats.three_bet, player_stats.three_bet_opp)} | #{player_stats.three_bet_opp} | #{pct(player_stats.preflop_fold, player_stats.hands)} | #{pct(player_stats.cbet, player_stats.cbet_opp)} | #{pct(player_stats.fold_to_cbet, player_stats.fold_to_cbet_opp)} | #{pct(player_stats.wtsd, player_stats.saw_flop)} | #{pct(player_stats.wmsd, player_stats.wtsd)} | #{player_stats.hands} |")
+      IO.puts("| #{elem(id, 1)} | #{profile.archetype} | #{pct(player_stats.vpip, player_stats.hands)} | #{pct(player_stats.pfr, player_stats.hands)} | #{pct(player_stats.limp, player_stats.hands)} | #{pct(player_stats.three_bet, player_stats.three_bet_opp)} | #{player_stats.three_bet_opp} | #{pct(player_stats.preflop_fold, player_stats.hands)} | #{pct(player_stats.cbet, player_stats.cbet_opp)} | #{pct(player_stats.fold_to_cbet, player_stats.fold_to_cbet_opp)} | #{pct(player_stats.wtsd, player_stats.saw_flop)} | #{pct(player_stats.wmsd, player_stats.wtsd)} | #{pct(player_stats.river_air_bet, player_stats.river_air_opp)} | #{pct(player_stats.river_air_raise, player_stats.river_air_opp)} | #{pct(player_stats.river_weak_big_call, player_stats.river_weak_big_call_opp)} | #{player_stats.river_non_strong_all_in} | #{player_stats.hands} |")
     end)
 
     print_archetype_report(stats, profiles_by_id)
@@ -282,15 +320,15 @@ defmodule PokerProfileStats do
     IO.puts("")
     IO.puts("## By archetype")
     IO.puts("")
-    IO.puts("| Archetype | VPIP | PFR | Limp | 3bet | 3bet opp | Fold PF | C-bet | Fold vs C-bet | WTSD | W$SD | Hands |")
-    IO.puts("| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |")
+    IO.puts("| Archetype | VPIP | PFR | Limp | 3bet | 3bet opp | Fold PF | C-bet | Fold vs C-bet | WTSD | W$SD | River air bet | River air raise | Weak big call | Non-strong all-in | Hands |")
+    IO.puts("| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |")
 
     stats
     |> Enum.group_by(fn {id, _player_stats} -> Map.fetch!(profiles_by_id, id).archetype end, fn {_id, player_stats} -> player_stats end)
     |> Enum.sort_by(&elem(&1, 0))
     |> Enum.each(fn {archetype, rows} ->
       row = merge_stats(rows)
-      IO.puts("| #{archetype} | #{pct(row.vpip, row.hands)} | #{pct(row.pfr, row.hands)} | #{pct(row.limp, row.hands)} | #{pct(row.three_bet, row.three_bet_opp)} | #{row.three_bet_opp} | #{pct(row.preflop_fold, row.hands)} | #{pct(row.cbet, row.cbet_opp)} | #{pct(row.fold_to_cbet, row.fold_to_cbet_opp)} | #{pct(row.wtsd, row.saw_flop)} | #{pct(row.wmsd, row.wtsd)} | #{row.hands} |")
+      IO.puts("| #{archetype} | #{pct(row.vpip, row.hands)} | #{pct(row.pfr, row.hands)} | #{pct(row.limp, row.hands)} | #{pct(row.three_bet, row.three_bet_opp)} | #{row.three_bet_opp} | #{pct(row.preflop_fold, row.hands)} | #{pct(row.cbet, row.cbet_opp)} | #{pct(row.fold_to_cbet, row.fold_to_cbet_opp)} | #{pct(row.wtsd, row.saw_flop)} | #{pct(row.wmsd, row.wtsd)} | #{pct(row.river_air_bet, row.river_air_opp)} | #{pct(row.river_air_raise, row.river_air_opp)} | #{pct(row.river_weak_big_call, row.river_weak_big_call_opp)} | #{row.river_non_strong_all_in} | #{row.hands} |")
     end)
   end
 

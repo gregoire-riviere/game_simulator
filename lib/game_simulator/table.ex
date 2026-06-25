@@ -32,9 +32,9 @@ defmodule GameSimulator.Table do
   def init(options) do
     # La table V1 est toujours 6-max : le héros reçoit le siège 6, les PNJ les autres.
     owner = Keyword.fetch!(options, :owner)
-    mode = Keyword.get(options, :mode, :elimination)
+    mode = Keyword.get(options, :mode, :cash_nl2)
     provider = Keyword.get(options, :profile_provider, Poker.LocalProfileProvider)
-    {:ok, game} = Poker.Game.start_link(small_blind: 1, big_blind: 2, mode: mode)
+    {:ok, game} = Poker.Game.start_link(small_blind: 1, big_blind: 2, mode: mode, min_stack: 80, top_up_to: 200)
     profiles = provider.generate(5)
     human_id = {:human, owner}
 
@@ -89,8 +89,9 @@ defmodule GameSimulator.Table do
   def handle_call({:next_hand, owner}, _from, state) do
     with :ok <- owner?(state, owner),
          :ok <- hero_has_chips(state),
-         {:ok, _snapshot} <- Poker.Game.start_hand(state.game) do
-      reply(%{state | actions: []}, owner)
+         {:ok, snapshot} <- Poker.Game.start_hand(state.game) do
+      state = %{state | actions: []} |> record_top_ups(snapshot)
+      reply(state, owner)
     else
       {:error, reason} -> {:reply, {:error, reason}, state}
     end
@@ -115,12 +116,19 @@ defmodule GameSimulator.Table do
   def hero_has_chips(state) do
     # Une cave vide ne peut pas entrer dans une nouvelle main ; le recave viendra plus tard.
     {:ok, snapshot} = Poker.Game.public_state(state.game, state.human_id)
-    if snapshot.players[state.human_id].stack > 0, do: :ok, else: {:error, :hero_busted}
+    if state.mode == :cash_nl2 or snapshot.players[state.human_id].stack > 0, do: :ok, else: {:error, :hero_busted}
   end
 
   def record_action(state, id, action) do
     action = %{player: player_name(state, id), action: action_name(action)}
     %{state | actions: Enum.take([action | state.actions], 8)}
+  end
+
+  def record_top_ups(state, %{top_ups: top_ups}) do
+    Enum.reduce(top_ups, state, fn {id, amount}, state ->
+      action = %{player: player_name(state, id), action: "recave #{amount}"}
+      %{state | actions: Enum.take([action | state.actions], 8)}
+    end)
   end
 
   def action_name({:bet, amount}), do: "mise #{amount}"

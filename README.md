@@ -129,13 +129,13 @@ then call `GameSimulatorWeb.Auth.issue_token/1` on the server.
 
 ## Poker mode
 
-The current poker implementation targets a simple NL2 6-max elimination table:
+The current poker implementation targets a simple NL2 6-max cash table:
 
 - blinds are `1/2`, represented as integer cents;
 - every player starts with `200`;
 - the hero sits at seat 6 and five PNJ fill seats 1 to 5;
-- `mode: :elimination` is explicit: players with no chips do not rebuy or auto top-up;
-- a new hand can start only if the hero still has chips.
+- `mode: :cash_nl2` automatically tops up stacks below `80` back to `200`;
+- the interface shows automatic top-ups in the recent actions list.
 
 The rules engine handles betting order, legal check/call/fold/bet/raise actions,
 all-in calls, incomplete all-in raises that do not reopen raises to players who
@@ -149,7 +149,7 @@ call (`to_call`, pot odds, bet size, and stack pressure), broad preflop situatio
 such as limp/raise/all-in, simple preflop sizing rules, and postflop categories
 that distinguish made hands using private cards from hands mostly on the board.
 
-Rake, cash-game rebuy, and auto top-up are intentionally not enabled in this V1.
+Rake is intentionally not enabled in this V1.
 
 ### PNJ profile simulation
 

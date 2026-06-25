@@ -82,6 +82,10 @@ defmodule Poker.Decision do
     probabilities = apply_profile_biases(probabilities, profile, category, draw, context)
     probabilities = apply_price_pressure(probabilities, profile, context)
     probabilities = apply_tilt(probabilities, profile)
+    probabilities = apply_late_street_value_pressure(probabilities, category, context)
+    probabilities = apply_late_street_price_guard(probabilities, category, context)
+    probabilities = apply_showdown_discipline(probabilities, profile, category, context)
+    probabilities = apply_river_sanity_guard(probabilities, profile, category, draw, context)
     probabilities |> normalize_probabilities() |> weighted_random() |> postflop_action(profile, context)
   end
 
@@ -91,6 +95,7 @@ defmodule Poker.Decision do
       {:very_strong, _draw} -> %{bet: 0.75, check: 0.25}
       {:strong, _draw} -> %{bet: 0.60, check: 0.40}
       {:medium, _draw} -> %{bet: 0.30, check: 0.70}
+      {:ace_high, _draw} -> %{bet: 0.05, check: 0.95}
       {:air, :none} -> %{bet: 0.10, check: 0.90}
       {:air, _draw} -> %{bet: 0.35, check: 0.65}
     end
@@ -103,6 +108,7 @@ defmodule Poker.Decision do
       {:strong, _draw} -> %{raise: 0.15, call: 0.70, fold: 0.15}
       {:medium, :none} -> %{raise: 0.0, call: 0.45, fold: 0.55}
       {:medium, _draw} -> %{raise: 0.10, call: 0.55, fold: 0.35}
+      {:ace_high, _draw} -> %{raise: 0.0, call: 0.20, fold: 0.80}
       {:air, :none} -> %{raise: 0.05, call: 0.05, fold: 0.90}
       {:air, _draw} -> %{raise: 0.10, call: 0.55, fold: 0.35}
     end
@@ -180,6 +186,94 @@ defmodule Poker.Decision do
     |> scale_probability(:raise, 1 + tilt)
     |> scale_probability(:fold, max(0.3, 1 - tilt))
   end
+
+  def apply_late_street_value_pressure(probabilities, category, %{phase: phase, to_call: 0}) when phase in [:turn, :river] and category in [:nuts, :very_strong, :strong] do
+    probabilities
+    |> scale_probability(:bet, 1.7)
+    |> scale_probability(:check, 0.35)
+  end
+
+  def apply_late_street_value_pressure(probabilities, category, %{phase: phase, to_call: 0}) when phase in [:turn, :river] and category in [:medium, :ace_high, :air] do
+    probabilities
+    |> scale_probability(:bet, 0.45)
+    |> scale_probability(:check, 1.35)
+  end
+
+  def apply_late_street_value_pressure(probabilities, _category, _context), do: probabilities
+
+  def apply_late_street_price_guard(probabilities, category, %{phase: phase, to_call: to_call, bet_size_ratio: ratio}) when phase in [:turn, :river] and to_call > 0 and ratio >= 0.66 and category in [:medium, :ace_high, :air] do
+    # Les gros sizings turn/river polarisent davantage : les mains faibles doivent beaucoup moins payer.
+    call_factor = if category == :medium, do: 0.45, else: 0.20
+
+    probabilities
+    |> scale_probability(:raise, 0.10)
+    |> scale_probability(:call, call_factor)
+    |> scale_probability(:fold, 2.4)
+  end
+
+  def apply_late_street_price_guard(probabilities, _category, _context), do: probabilities
+
+  def apply_showdown_discipline(probabilities, profile, category, %{phase: phase, to_call: to_call}) when phase in [:turn, :river] and to_call > 0 and category in [:medium, :ace_high, :air] do
+    call_factor =
+      case profile.archetype do
+        :calling_station -> 0.55
+        :limp_caller -> 0.45
+        :spewy_aggro -> 0.60
+        :lag -> 0.32
+        :tag -> 0.16
+        :nit_weak -> 0.12
+        :fit_or_fold -> 0.12
+      end
+
+    fold_factor =
+      case profile.archetype do
+        :calling_station -> 1.75
+        :limp_caller -> 2.00
+        :spewy_aggro -> 1.45
+        :lag -> 2.30
+        :tag -> 3.60
+        :nit_weak -> 4.20
+        :fit_or_fold -> 4.20
+      end
+
+    probabilities
+    |> scale_probability(:raise, 0.15)
+    |> scale_probability(:call, call_factor)
+    |> scale_probability(:fold, fold_factor)
+  end
+
+  def apply_showdown_discipline(probabilities, _profile, _category, _context), do: probabilities
+
+  def apply_river_sanity_guard(probabilities, profile, category, _draw, %{phase: :river, to_call: 0}) when category in [:air, :ace_high] do
+    bet_factor =
+      case profile.archetype do
+        :spewy_aggro -> 0.55
+        :lag -> 0.25
+        _other -> 0.01
+      end
+
+    probabilities
+    |> scale_probability(:bet, bet_factor)
+    |> scale_probability(:check, 2.0)
+  end
+
+  def apply_river_sanity_guard(probabilities, _profile, :air, _draw, %{phase: :river, to_call: to_call} = context) when to_call > 0 do
+    call_factor = if context.bet_size_ratio > 0.7, do: 0.2, else: 0.5
+
+    probabilities
+    |> scale_probability(:raise, 0.05)
+    |> scale_probability(:call, call_factor)
+    |> scale_probability(:fold, 2.0)
+  end
+
+  def apply_river_sanity_guard(probabilities, _profile, :medium, _draw, %{phase: :river, to_call: to_call, bet_size_ratio: ratio}) when to_call > 0 and ratio > 0.75 do
+    probabilities
+    |> scale_probability(:raise, 0.1)
+    |> scale_probability(:call, 0.55)
+    |> scale_probability(:fold, 1.7)
+  end
+
+  def apply_river_sanity_guard(probabilities, _profile, _category, _draw, _context), do: probabilities
 
   def scale_probability(probabilities, action, factor) do
     Map.update(probabilities, action, 0.0, &(&1 * factor))
@@ -380,7 +474,12 @@ defmodule Poker.Decision do
 
   def unpaired_category(hole_ranks, board_ranks) do
     board_high = Enum.max(board_ranks)
-    if Enum.count(hole_ranks, &(&1 > board_high)) == 2, do: :two_overcards, else: :air
+
+    cond do
+      Enum.count(hole_ranks, &(&1 > board_high)) == 2 -> :two_overcards
+      14 in hole_ranks -> :ace_high
+      true -> :air
+    end
   end
 
   def hand_strength_category(category) do
@@ -389,6 +488,7 @@ defmodule Poker.Decision do
       category when category in [:full_house, :flush, :straight, :set_or_trips] -> :very_strong
       category when category in [:board_quads, :two_pair, :overpair, :top_pair_good_kicker] -> :strong
       category when category in [:top_pair_bad_kicker, :middle_pair, :bottom_pair, :board_trips, :board_two_pair] -> :medium
+      :ace_high -> :ace_high
       _other -> :air
     end
   end
@@ -449,9 +549,9 @@ defmodule Poker.Decision do
 
   def pot_fraction(profile) do
     cond do
-      chance(profile.weird_sizing_frequency * 0.25) -> Enum.random([1.25, 1.5])
+      chance(profile.weird_sizing_frequency * 0.25) -> Enum.random([1.0, 1.25])
       profile.archetype in [:calling_station, :limp_caller] -> Enum.random([0.25, 0.33, 0.5, 0.75])
-      profile.archetype == :spewy_aggro -> Enum.random([0.5, 0.75, 1.0, 1.25])
+      profile.archetype == :spewy_aggro -> Enum.random([0.5, 0.66, 0.75, 1.0])
       true -> Enum.random([0.33, 0.5, 0.66])
     end
   end
