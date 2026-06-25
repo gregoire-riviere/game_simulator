@@ -20,14 +20,15 @@ defmodule Poker.Decision do
     vpip = effective_rate(profile.vpip, context.position)
     pfr = effective_rate(profile.pfr, context.position)
     three_bet = effective_rate(profile.three_bet, context.position)
+    call_range = preflop_call_range(profile, vpip)
 
     cond do
       situation == :facing_all_in and in_top_percent?(context.cards, max(4, three_bet)) -> call_or_fold(profile, context, 0.55)
       situation == :facing_all_in -> fold_or_check(context)
-      situation == :facing_raise and in_top_percent?(context.cards, three_bet) and chance(0.65 + tilt) -> raise_action(profile, context)
-      situation == :facing_raise and in_top_percent?(context.cards, vpip) -> call_or_fold(profile, context, preflop_call_chance(profile, context))
+      situation == :facing_raise and in_top_percent?(context.cards, three_bet) and chance(three_bet_chance(profile) + tilt) -> raise_action(profile, context)
+      situation == :facing_raise and in_top_percent?(context.cards, call_range) -> call_or_fold(profile, context, preflop_call_chance(profile, context))
       situation == :facing_limp and in_top_percent?(context.cards, pfr) and chance(0.75 + tilt) -> raise_action(profile, context)
-      situation == :facing_limp and in_top_percent?(context.cards, vpip) -> call_or_fold(profile, context, 0.65)
+      situation == :facing_limp and in_top_percent?(context.cards, call_range) -> call_or_fold(profile, context, preflop_limp_call_chance(profile))
       situation == :no_raise_yet and in_top_percent?(context.cards, pfr) -> raise_action(profile, context)
       situation == :no_raise_yet and in_top_percent?(context.cards, vpip) -> passive_action(context)
       chance(profile.stupid_mistake_frequency) -> passive_action(context)
@@ -41,6 +42,34 @@ defmodule Poker.Decision do
       context.current_bet > context.big_blind -> :facing_raise
       context.to_call > 0 -> :facing_limp
       true -> :no_raise_yet
+    end
+  end
+
+  def three_bet_chance(profile) do
+    case profile.archetype do
+      :tag -> 0.90
+      :lag -> 0.95
+      :spewy_aggro -> 1.0
+      _other -> 0.70
+    end
+  end
+
+  def preflop_call_range(profile, vpip) do
+    multiplier =
+      case profile.archetype do
+        :calling_station -> 1.45
+        :limp_caller -> 1.30
+        _other -> 1.0
+      end
+
+    min(100, round(vpip * multiplier))
+  end
+
+  def preflop_limp_call_chance(profile) do
+    case profile.archetype do
+      :calling_station -> 0.90
+      :limp_caller -> 0.85
+      _other -> 0.65
     end
   end
 
@@ -88,6 +117,7 @@ defmodule Poker.Decision do
     probabilities = if profile.overplays_top_pair and category == :strong, do: scale_probability(probabilities, :raise, 1.5) |> scale_probability(:fold, 0.5), else: probabilities
     probabilities = if profile.chases_draws and draw != :none, do: scale_probability(probabilities, :call, 1.5) |> scale_probability(:fold, 0.6), else: probabilities
     probabilities = if context.facing_cbet and category in [:medium, :air], do: scale_probability(probabilities, :fold, 1 + profile.fold_to_cbet), else: probabilities
+    probabilities = apply_sticky_cbet_bias(probabilities, profile, context)
 
     # À la river il n'y a plus de carte à venir : la curiosité représente un call faible pour voir.
     if context.phase == :river and context.to_call > 0 do
@@ -97,16 +127,44 @@ defmodule Poker.Decision do
     end
   end
 
+  def apply_sticky_cbet_bias(probabilities, %{archetype: :calling_station}, %{facing_cbet: true}) do
+    probabilities |> scale_probability(:call, 1.9) |> scale_probability(:fold, 0.45)
+  end
+
+  def apply_sticky_cbet_bias(probabilities, %{archetype: :limp_caller}, %{facing_cbet: true}) do
+    probabilities |> scale_probability(:call, 1.55) |> scale_probability(:fold, 0.65)
+  end
+
+  def apply_sticky_cbet_bias(probabilities, %{archetype: archetype}, %{facing_cbet: true}) when archetype in [:tag, :lag] do
+    probabilities |> scale_probability(:call, 1.35) |> scale_probability(:fold, 0.70)
+  end
+
+  def apply_sticky_cbet_bias(probabilities, _profile, _context), do: probabilities
+
   def apply_price_pressure(probabilities, _profile, %{to_call: 0}), do: probabilities
 
   def apply_price_pressure(probabilities, profile, context) do
     pressure = price_pressure(context)
-    curiosity = if profile.call_too_wide, do: 0.25, else: 0.0
+
+    call_bonus =
+      cond do
+        profile.archetype == :calling_station -> 0.55
+        profile.archetype == :limp_caller -> 0.35
+        profile.call_too_wide -> 0.25
+        true -> 0.0
+      end
+
+    fold_multiplier =
+      cond do
+        profile.archetype == :calling_station -> 0.35 + pressure * 0.25
+        profile.archetype == :limp_caller -> 0.55 + pressure * 0.35
+        true -> 0.85 + pressure * 0.65
+      end
 
     probabilities
-    |> scale_probability(:call, max(0.15, 1.25 - pressure + curiosity))
-    |> scale_probability(:raise, max(0.20, 1.10 - pressure * 0.6 + profile.aggression * 0.2))
-    |> scale_probability(:fold, 0.75 + pressure)
+    |> scale_probability(:call, max(0.25, 1.15 - pressure * 0.45 + call_bonus))
+    |> scale_probability(:raise, max(0.20, 1.05 - pressure * 0.45 + profile.aggression * 0.2))
+    |> scale_probability(:fold, fold_multiplier)
   end
 
   def price_pressure(context) do
@@ -191,11 +249,11 @@ defmodule Poker.Decision do
     round(rate * position_factor(position)) |> min(100)
   end
 
-  def position_factor(:early), do: 0.55
-  def position_factor(:hijack), do: 0.75
-  def position_factor(:cutoff), do: 0.90
+  def position_factor(:early), do: 0.70
+  def position_factor(:hijack), do: 0.85
+  def position_factor(:cutoff), do: 1.00
   def position_factor(:button), do: 1.25
-  def position_factor(:small_blind), do: 0.80
+  def position_factor(:small_blind), do: 0.85
   def position_factor(:big_blind), do: 1.10
 
   def in_top_percent?(hand, percent) do

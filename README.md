@@ -151,6 +151,30 @@ that distinguish made hands using private cards from hands mostly on the board.
 
 Rake, cash-game rebuy, and auto top-up are intentionally not enabled in this V1.
 
+### PNJ profile simulation
+
+Run a bot-only simulation to inspect whether local PNJ profiles look plausible
+over a larger sample:
+
+```sh
+mix run --no-start scripts/poker_profile_stats.exs 10000
+```
+
+The script creates a six-PNJ table, plays the requested number of hands, resets
+all stacks to `200` between hands, and prints Markdown tables per seat and per
+archetype. It reports VPIP, PFR, limp, 3bet, preflop fold, c-bet, fold vs c-bet,
+WTSD, and W$SD.
+
+The metrics are heuristic but stable enough for tuning:
+
+- VPIP excludes posted blinds and counts voluntary preflop chips.
+- PFR counts preflop aggressive actions.
+- Limp counts a voluntary preflop call before a raise.
+- C-bet counts the preflop aggressor making the first flop bet.
+- 3bet is measured over 3bet opportunities; the report also prints the opportunity count.
+- WTSD counts non-folded hands reaching a five-card board, divided by flops seen.
+- W$SD counts showdown hands with positive profit.
+
 ## Release
 
 Build and start a release:

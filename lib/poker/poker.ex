@@ -41,7 +41,7 @@ defmodule Poker do
   def hand_description({0, first, second, third, fourth, fifth}), do: %{category: :high_card, ranks: Enum.map([first, second, third, fourth, fifth], &rank_name/1)}
 
   def straight_ranks(5), do: ["5", "4", "3", "2", "A"]
-  def straight_ranks(high), do: Enum.map(high..(high - 4), &rank_name/1)
+  def straight_ranks(high), do: Enum.map(high..(high - 4)//-1, &rank_name/1)
 
   def rank_name(14), do: "A"
   def rank_name(13), do: "K"
