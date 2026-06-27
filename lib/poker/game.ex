@@ -62,6 +62,7 @@ defmodule Poker.Game do
          preflop_raise_count: 0, # Nombre de relances complètes préflop, open inclus.
          street_aggressor: nil, # Dernier miseur ou relanceur de la rue courante.
          active_player: nil, # Joueur dont l'action est actuellement attendue.
+         hand_number: 0, # Numéro de la main courante depuis la création de la table.
          history: [] # Cinquante dernières mains, de la plus récente à la plus ancienne.
        }}
     else
@@ -188,6 +189,7 @@ defmodule Poker.Game do
       state =
         %{state |
           phase: :preflop,
+          hand_number: state.hand_number + 1,
           dealer: dealer,
           deck: deck,
           board: [],
@@ -490,6 +492,7 @@ defmodule Poker.Game do
       end)
 
     hand = %{
+      number: state.hand_number,
       dealer: state.dealer,
       board: state.board,
       players: players,
@@ -606,6 +609,7 @@ defmodule Poker.Game do
     %{
       phase: state.phase,
       mode: state.mode,
+      hand_number: state.hand_number,
       dealer: state.dealer,
       board: state.board,
       pot: Enum.sum(Map.values(state.hand_contributions)),

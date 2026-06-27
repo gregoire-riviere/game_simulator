@@ -16,6 +16,18 @@ defmodule Poker.GameTest do
     assert :check in actions
   end
 
+  test "increments hand number for each started hand" do
+    {:ok, game} = Poker.Game.start_link(small_blind: 1, big_blind: 2)
+    {:ok, _player} = Poker.Game.join(game, :alice, 100, 1)
+    {:ok, _player} = Poker.Game.join(game, :bob, 100, 2)
+
+    assert {:ok, %{hand_number: 1}} = Poker.Game.start_hand(game)
+    assert {:ok, _state} = Poker.Game.act(game, :alice, :fold)
+    assert {:ok, [hand]} = Poker.Game.history(game, 1)
+    assert hand.number == 1
+    assert {:ok, %{hand_number: 2}} = Poker.Game.start_hand(game)
+  end
+
   test "starts in explicit elimination mode" do
     {:ok, game} = Poker.Game.start_link(small_blind: 1, big_blind: 2)
 
