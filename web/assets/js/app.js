@@ -15,6 +15,7 @@ const tableScreen = document.getElementById("table-screen");
 const tableStatus = document.getElementById("table-status");
 const pokerTable = document.getElementById("poker-table");
 const board = document.getElementById("board");
+const handNumber = document.getElementById("hand-number");
 const pot = document.getElementById("pot");
 const actionPanel = document.getElementById("action-panel");
 const recentActions = document.getElementById("recent-actions");
@@ -236,6 +237,7 @@ function renderTable(nextTable) {
   tableLobby.hidden = true;
   tableScreen.hidden = false;
   tableStatus.textContent = table.hand_finished ? "Main terminée." : table.hero_turn ? "C’est à vous de jouer." : "Action PNJ en cours.";
+  handNumber.textContent = `Main ${table.hand_number}`;
   pot.textContent = money(table.pot);
   board.replaceChildren(...table.board.map(card));
   renderPlayers(table.players);

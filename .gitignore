@@ -3,6 +3,7 @@
 /log/
 /data/
 /priv/static/
+/priv/static.previous/
 /cover/
 /.env
 /.env.test

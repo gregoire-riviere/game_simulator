@@ -75,7 +75,8 @@ button:disabled { cursor: wait; opacity: .65; }
 .extract-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: .8rem; }
 .extract-panel textarea { width: 100%; min-height: 18rem; margin: 0; resize: vertical; color: #dbeafe; background: #020617; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: .78rem; line-height: 1.45; }
 .poker-table { position: relative; min-height: 37rem; overflow: hidden; border: .8rem solid #17263a; border-radius: 48%; background: radial-gradient(ellipse at center, #17615b, #0c3638 72%); box-shadow: inset 0 0 0 .2rem #5b9d8d, 0 1rem 3rem #00000055; }
-.pot { position: absolute; top: 43%; left: 50%; transform: translate(-50%, -50%); color: #b8e4de; font-size: .85rem; text-align: center; }
+.pot { position: absolute; top: 43%; left: 50%; display: grid; gap: .1rem; transform: translate(-50%, -50%); color: #b8e4de; font-size: .85rem; text-align: center; }
+.hand-number { color: #dbeafe; font-size: .78rem; font-weight: 700; }
 .pot strong { display: block; color: #fff; font-size: 1.25rem; }
 .board { position: absolute; top: 51%; left: 50%; display: flex; gap: .35rem; transform: translateX(-50%); }
 .card { display: inline-grid; width: 2.2rem; height: 3rem; place-items: center; border-radius: .3rem; color: #0f172a; background: #f8fafc; box-shadow: 0 .2rem .4rem #00000044; font-size: .9rem; font-weight: 800; }
