@@ -7,10 +7,22 @@ defmodule GameSimulator.TableTest do
 
     assert length(state.players) == 6
     assert state.mode == :cash_nl2
+    assert state.hand_number == 1
     assert length(Enum.find(state.players, &(&1.id == "hero")).cards) == 2
     assert Enum.all?(Enum.reject(state.players, &(&1.id == "hero")), &(&1.cards == :hidden))
     refute Map.has_key?(state, :profiles)
     assert {:error, :forbidden} = GameSimulator.Table.state(table, "mallory")
+  end
+
+  test "resets hand number on a new table" do
+    {:ok, first_table} = GameSimulator.Table.start_link(owner: "alice")
+    first_state = :sys.get_state(first_table)
+    :sys.replace_state(first_state.game, &%{&1 | phase: :waiting})
+
+    assert {:ok, %{hand_number: 2}} = GameSimulator.Table.next_hand(first_table, "alice")
+
+    {:ok, second_table} = GameSimulator.Table.start_link(owner: "alice")
+    assert {:ok, %{hand_number: 1}} = GameSimulator.Table.state(second_table, "alice")
   end
 
   test "advances one bot action at a time" do

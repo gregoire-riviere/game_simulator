@@ -177,7 +177,7 @@ defmodule GameSimulator.Table do
 
   def extract_hand(state, hand, index) do
     [
-      "## Main #{index}",
+      "## Main #{Map.get(hand, :number, index)}",
       "",
       "- Dealer: #{player_name(state, hand.dealer)}",
       "- Board: #{cards_text(hand.board)}",
@@ -249,6 +249,7 @@ defmodule GameSimulator.Table do
       owner: owner,
       mode: state.mode,
       phase: snapshot.phase,
+      hand_number: snapshot.hand_number,
       dealer: public_id(state, snapshot.dealer),
       board: cards(snapshot.board),
       pot: snapshot.pot,
