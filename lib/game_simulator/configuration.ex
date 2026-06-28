@@ -99,7 +99,7 @@ defmodule GameSimulator.Configuration do
     provider = Keyword.get(config, :provider, "openrouter")
     api_key = Keyword.get(config, :api_key)
     base_url = Keyword.get(config, :base_url, "https://openrouter.ai/api/v1")
-    decision_model = Keyword.get(config, :decision_model, "google/gemini-2.5-flash")
+    decision_model = Keyword.get(config, :decision_model, "deepseek/deepseek-v4-flash")
     timeout_ms = Keyword.get(config, :timeout_ms, 1_500)
     audit_file = Keyword.get(config, :audit_file, "data/llm_shadow_audit.ndjson")
     http_referer = Keyword.get(config, :http_referer)

@@ -103,7 +103,7 @@ defmodule Poker.DecisionRouterTest do
       provider: "openrouter",
       api_key: "test-key",
       base_url: "https://openrouter.ai/api/v1",
-      decision_model: "google/gemini-2.5-flash",
+      decision_model: "deepseek/deepseek-v4-flash",
       timeout_ms: 1_500,
       audit_file: audit_file(),
       http_referer: nil,
