@@ -62,6 +62,7 @@ defmodule Poker.DecisionRouterTest do
     assert_receive {:llm_shadow_called, _score}
     assert result.action == :fold
     assert result.local_action != result.action
+    assert result.llm_applied
   end
 
   test "typed profile is only a score bonus, not a hard filter" do

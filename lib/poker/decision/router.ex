@@ -15,10 +15,11 @@ defmodule Poker.Decision.Router do
     metadata = Map.put(metadata, :interest_score, score)
 
     shadow = llm_decision(profile, context, local_action, metadata, config, score)
-    action = if llm_action_applicable?(config, shadow), do: action_from_llm(shadow), else: local_action
+    llm_applied = llm_action_applicable?(config, shadow)
+    action = if llm_applied, do: action_from_llm(shadow), else: local_action
 
     audit_shadow(profile, context, local_action, metadata, shadow, config)
-    %{action: action, local_action: local_action, llm_shadow: shadow}
+    %{action: action, local_action: local_action, llm_shadow: shadow, llm_applied: llm_applied}
   end
 
 

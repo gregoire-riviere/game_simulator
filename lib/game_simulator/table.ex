@@ -78,7 +78,7 @@ defmodule GameSimulator.Table do
          decision = Poker.Decision.Router.decide(Map.fetch!(state.profiles, id), context, decision_metadata(state, id)),
          action = decision.action,
          {:ok, game_state} <- Poker.Game.act(state.game, id, action) do
-      state = record_action(state, id, action, decision.llm_shadow, decision.local_action)
+      state = record_action(state, id, action, decision.llm_shadow, decision.local_action, decision.llm_applied)
       state = update_profiles(state, game_state)
       reply(state, owner)
     else
@@ -169,22 +169,24 @@ defmodule GameSimulator.Table do
   def aggressive_action?("raise_to " <> _amount, amount), do: amount >= 0
   def aggressive_action?(_action, _amount), do: false
 
-  def record_action(state, id, action), do: record_action(state, id, action, nil, action)
-  def record_action(state, id, action, llm_shadow), do: record_action(state, id, action, llm_shadow, action)
+  def record_action(state, id, action), do: record_action(state, id, action, nil, action, false)
+  def record_action(state, id, action, llm_shadow), do: record_action(state, id, action, llm_shadow, action, false)
+  def record_action(state, id, action, llm_shadow, local_action), do: record_action(state, id, action, llm_shadow, local_action, false)
 
-  def record_action(state, id, action, llm_shadow, local_action) do
-    action = action_entry(state, id, action, llm_shadow, local_action)
+  def record_action(state, id, action, llm_shadow, local_action, llm_applied) do
+    action = action_entry(state, id, action, llm_shadow, local_action, llm_applied)
     %{state | actions: Enum.take([action | state.actions], 8), hand_actions: [action | state.hand_actions]}
   end
 
-  def action_entry(state, id, action, nil, _local_action), do: %{player: player_name(state, id), action: action_name(action)}
+  def action_entry(state, id, action, nil, _local_action, _llm_applied), do: %{player: player_name(state, id), action: action_name(action)}
 
-  def action_entry(state, id, action, llm_shadow, local_action) do
+  def action_entry(state, id, action, llm_shadow, local_action, llm_applied) do
     %{
       player: player_name(state, id),
       action: action_name(action),
       played_action: Poker.Decision.Router.local_action_map(local_action),
-      llm_shadow: llm_shadow
+      llm_shadow: llm_shadow,
+      llm_applied: llm_applied
     }
   end
 
