@@ -239,7 +239,7 @@ function actionText(action) {
   return `${action.action}${amount}`;
 }
 
-function renderShadow(shadow, playedAction) {
+function renderShadow(shadow, playedAction, llmApplied = false) {
   if (!shadow || shadow.status !== "available") return null;
 
   const block = document.createElement("div");
@@ -247,7 +247,7 @@ function renderShadow(shadow, playedAction) {
 
   const summary = document.createElement("div");
   summary.className = "llm-shadow-summary";
-  summary.textContent = `Action jouée : ${actionText(playedAction)} · LLM aurait fait : ${actionText(shadow)} · Divergence : ${shadow.diverged ? "oui" : "non"}`;
+  summary.textContent = llmApplied ? `🤖 Décision LLM : ${actionText(shadow)}` : `Action jouée : ${actionText(playedAction)} · LLM aurait fait : ${actionText(shadow)} · Divergence : ${shadow.diverged ? "oui" : "non"}`;
   block.append(summary);
 
   if (shadow.short_reason) {
@@ -271,7 +271,7 @@ function renderActionItem(item) {
   title.textContent = `${item.player} : ${item.action}`;
   line.append(title);
 
-  const shadow = renderShadow(item.llm_shadow, item.played_action);
+  const shadow = renderShadow(item.llm_shadow, item.played_action, item.llm_applied);
   if (shadow) line.append(shadow);
 
   return line;
