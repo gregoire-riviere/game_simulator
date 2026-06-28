@@ -106,6 +106,7 @@ config :game_simulator,
   llm: [
     enabled: env!("GAME_SIMULATOR_LLM_ENABLED", :boolean, false),
     shadow_mode: env!("GAME_SIMULATOR_LLM_SHADOW_MODE", :boolean, true),
+    mode: String.to_existing_atom(env!("GAME_SIMULATOR_LLM_MODE", :string!, "shadow")),
     provider: env!("GAME_SIMULATOR_LLM_PROVIDER", :string!, "openrouter"),
     api_key: env!("GAME_SIMULATOR_LLM_API_KEY", :string, nil),
     base_url: env!("GAME_SIMULATOR_LLM_BASE_URL", :string!, "https://openrouter.ai/api/v1"),

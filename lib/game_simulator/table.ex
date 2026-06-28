@@ -27,7 +27,7 @@ defmodule GameSimulator.Table do
   def advance_bot(table, owner), do: GenServer.call(table, {:advance_bot, owner})
   def next_hand(table, owner), do: GenServer.call(table, {:next_hand, owner})
   def extract(table, owner, count), do: GenServer.call(table, {:extract, owner, count})
-  def set_llm_shadow(table, owner, enabled), do: GenServer.call(table, {:set_llm_shadow, owner, enabled})
+  def set_llm_mode(table, owner, mode), do: GenServer.call(table, {:set_llm_mode, owner, mode})
 
   @impl true
   def init(options) do
@@ -47,7 +47,7 @@ defmodule GameSimulator.Table do
     {:ok, _state} = Poker.Game.start_hand(game)
 
     profiles = Map.new(Enum.with_index(profiles, 1), fn {profile, seat} -> {{:bot, seat}, profile} end)
-    {:ok, %{owner: owner, game: game, human_id: human_id, profiles: profiles, actions: [], hand_actions: [], llm_shadow_enabled: true, mode: mode}}
+    {:ok, %{owner: owner, game: game, human_id: human_id, profiles: profiles, actions: [], hand_actions: [], llm_mode: :shadow, mode: mode}}
   end
 
   @impl true
@@ -78,7 +78,7 @@ defmodule GameSimulator.Table do
          decision = Poker.Decision.Router.decide(Map.fetch!(state.profiles, id), context, decision_metadata(state, id)),
          action = decision.action,
          {:ok, game_state} <- Poker.Game.act(state.game, id, action) do
-      state = record_action(state, id, action, decision.llm_shadow)
+      state = record_action(state, id, action, decision.llm_shadow, decision.local_action)
       state = update_profiles(state, game_state)
       reply(state, owner)
     else
@@ -109,18 +109,18 @@ defmodule GameSimulator.Table do
     end
   end
 
-  def handle_call({:set_llm_shadow, owner, enabled}, _from, state) when is_boolean(enabled) do
+  def handle_call({:set_llm_mode, owner, mode}, _from, state) when mode in [:llm, :shadow, :off] do
     with :ok <- owner?(state, owner) do
-      state = %{state | llm_shadow_enabled: enabled}
+      state = %{state | llm_mode: mode}
       reply(state, owner)
     else
       {:error, reason} -> {:reply, {:error, reason}, state}
     end
   end
 
-  def handle_call({:set_llm_shadow, owner, _enabled}, _from, state) do
+  def handle_call({:set_llm_mode, owner, _mode}, _from, state) do
     with :ok <- owner?(state, owner) do
-      {:reply, {:error, :invalid_llm_shadow_enabled}, state}
+      {:reply, {:error, :invalid_llm_mode}, state}
     else
       {:error, reason} -> {:reply, {:error, reason}, state}
     end
@@ -149,7 +149,7 @@ defmodule GameSimulator.Table do
       player_name: player_name(state, id),
       hero_in_hand: hero_in_hand?(game_state, state.human_id),
       previous_aggressive_action: previous_aggressive_action?(game_state),
-      llm_config: %{llm_config | enabled: llm_config.enabled and state.llm_shadow_enabled}
+      llm_config: %{llm_config | enabled: llm_config.enabled and state.llm_mode != :off, mode: state.llm_mode}
     }
   end
 
@@ -169,20 +169,21 @@ defmodule GameSimulator.Table do
   def aggressive_action?("raise_to " <> _amount, amount), do: amount >= 0
   def aggressive_action?(_action, _amount), do: false
 
-  def record_action(state, id, action), do: record_action(state, id, action, nil)
+  def record_action(state, id, action), do: record_action(state, id, action, nil, action)
+  def record_action(state, id, action, llm_shadow), do: record_action(state, id, action, llm_shadow, action)
 
-  def record_action(state, id, action, llm_shadow) do
-    action = action_entry(state, id, action, llm_shadow)
+  def record_action(state, id, action, llm_shadow, local_action) do
+    action = action_entry(state, id, action, llm_shadow, local_action)
     %{state | actions: Enum.take([action | state.actions], 8), hand_actions: [action | state.hand_actions]}
   end
 
-  def action_entry(state, id, action, nil), do: %{player: player_name(state, id), action: action_name(action)}
+  def action_entry(state, id, action, nil, _local_action), do: %{player: player_name(state, id), action: action_name(action)}
 
-  def action_entry(state, id, action, llm_shadow) do
+  def action_entry(state, id, action, llm_shadow, local_action) do
     %{
       player: player_name(state, id),
       action: action_name(action),
-      played_action: Poker.Decision.Router.local_action_map(action),
+      played_action: Poker.Decision.Router.local_action_map(local_action),
       llm_shadow: llm_shadow
     }
   end
@@ -322,8 +323,8 @@ defmodule GameSimulator.Table do
       players: players,
       hero_turn: snapshot.active_player == state.human_id,
       hand_finished: snapshot.phase == :waiting,
-      llm_shadow_available: llm_config.enabled,
-      llm_shadow_enabled: state.llm_shadow_enabled,
+      llm_available: llm_config.enabled,
+      llm_mode: state.llm_mode,
       last_result: last_result(state, snapshot.phase),
       actions: if(snapshot.active_player == state.human_id, do: Poker.Game.next_action(state.game) |> elem(1) |> Map.fetch!(:actions), else: []),
       recent_actions: Enum.reverse(state.actions),

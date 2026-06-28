@@ -52,6 +52,18 @@ defmodule Poker.DecisionRouterTest do
     assert File.read!(audit_file()) =~ "\"player\":\"Sophie\""
   end
 
+
+  test "llm mode applies a valid LLM decision" do
+    context = interesting_context()
+    profile = %{Poker.Profile.new(1) | archetype: :tag}
+    config = Map.put(metadata(true, 4).llm_config, :mode, :llm)
+    result = Poker.Decision.Router.decide(profile, context, %{base_metadata() | llm_config: config})
+
+    assert_receive {:llm_shadow_called, _score}
+    assert result.action == :fold
+    assert result.local_action != result.action
+  end
+
   test "typed profile is only a score bonus, not a hard filter" do
     context = %{interesting_context() | phase: :flop, pot: 8, to_call: 0, pot_odds: 0.0, actions: [:check, %{bet: %{min: 2, max: 200}}]}
     tag = %{Poker.Profile.new(1) | archetype: :tag}

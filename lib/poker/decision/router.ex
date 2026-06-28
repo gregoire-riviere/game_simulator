@@ -2,8 +2,8 @@ defmodule Poker.Decision.Router do
   @moduledoc """
   Routeur de décision PNJ.
 
-  La décision locale reste toujours l'action retournée au moteur. Le LLM ne sert
-  qu'à produire une observation shadow optionnelle pour l'UI et l'audit.
+  La décision locale reste le défaut. En mode LLM, une réponse valide peut
+  remplacer cette action ; en mode shadow elle reste seulement une observation.
   """
 
   @typed_profiles [:calling_station, :lag, :spewy_aggro, :nit_weak]
@@ -14,23 +14,37 @@ defmodule Poker.Decision.Router do
     score = interest_score(profile, context, local_action, metadata)
     metadata = Map.put(metadata, :interest_score, score)
 
-    shadow =
-      cond do
-        not config.enabled ->
-          skipped_shadow(score, "disabled")
-
-        not config.shadow_mode ->
-          skipped_shadow(score, "shadow_mode_off")
-
-        score < config.interest_threshold ->
-          skipped_shadow(score, "score_below_threshold")
-
-        true ->
-          config.client.call(profile, context, local_action, metadata, config)
-      end
+    shadow = llm_decision(profile, context, local_action, metadata, config, score)
+    action = if llm_action_applicable?(config, shadow), do: action_from_llm(shadow), else: local_action
 
     audit_shadow(profile, context, local_action, metadata, shadow, config)
-    %{action: local_action, llm_shadow: shadow}
+    %{action: action, local_action: local_action, llm_shadow: shadow}
+  end
+
+
+  def llm_decision(profile, context, local_action, metadata, config, score) do
+    cond do
+      not config.enabled ->
+        skipped_shadow(score, "disabled")
+
+      Map.get(config, :mode, if(config.shadow_mode, do: :shadow, else: :off)) == :off ->
+        skipped_shadow(score, "disabled")
+
+      score < config.interest_threshold ->
+        skipped_shadow(score, "score_below_threshold")
+
+      true ->
+        config.client.call(profile, context, local_action, metadata, config)
+    end
+  end
+
+  def llm_action_applicable?(%{mode: :llm}, %{status: "available", valid: true}), do: true
+  def llm_action_applicable?(_config, _shadow), do: false
+
+  def action_from_llm(%{action: "bet", amount: amount}), do: {:bet, amount}
+  def action_from_llm(%{action: "raise", amount: amount}), do: {:raise_to, amount}
+  def action_from_llm(%{action: action}) when action in ["fold", "check", "call", "all_in"] do
+    String.to_existing_atom(action)
   end
 
   def interest_score(profile, context, local_action, metadata) do
