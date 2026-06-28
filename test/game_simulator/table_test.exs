@@ -48,13 +48,14 @@ defmodule GameSimulator.TableTest do
     assert length(updated.hand_actions) == 10
   end
 
-  test "can disable LLM shadow mode for the current table" do
+  test "can choose the LLM mode for the current table" do
     {:ok, table} = GameSimulator.Table.start_link(owner: "alice")
 
-    assert {:ok, %{llm_shadow_enabled: true}} = GameSimulator.Table.state(table, "alice")
-    assert {:ok, %{llm_shadow_enabled: false}} = GameSimulator.Table.set_llm_shadow(table, "alice", false)
-    assert {:error, :invalid_llm_shadow_enabled} = GameSimulator.Table.set_llm_shadow(table, "alice", "false")
-    assert {:error, :forbidden} = GameSimulator.Table.set_llm_shadow(table, "mallory", true)
+    assert {:ok, %{llm_mode: :shadow}} = GameSimulator.Table.state(table, "alice")
+    assert {:ok, %{llm_mode: :off}} = GameSimulator.Table.set_llm_mode(table, "alice", :off)
+    assert {:ok, %{llm_mode: :llm}} = GameSimulator.Table.set_llm_mode(table, "alice", :llm)
+    assert {:error, :invalid_llm_mode} = GameSimulator.Table.set_llm_mode(table, "alice", "false")
+    assert {:error, :forbidden} = GameSimulator.Table.set_llm_mode(table, "mallory", :shadow)
   end
 
   test "does not start a new hand when the hero has no chips" do

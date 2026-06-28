@@ -6,6 +6,28 @@ defmodule Poker.Decision.LLMShadow do
   réponse du modèle en observation validée pour l'UI et l'audit.
   """
 
+
+  def credits(config) do
+    :inets.start()
+    url = String.to_charlist(String.trim_trailing(config.base_url, "/") <> "/credits")
+    headers = [{~c"Authorization", String.to_charlist("Bearer " <> config.api_key)}]
+
+    case :httpc.request(:get, {url, headers}, [{:timeout, config.timeout_ms}], []) do
+      {:ok, {{_version, 200, _reason}, _headers, body}} -> parse_credits(body)
+      {:ok, {{_version, status, _reason}, _headers, _body}} -> {:error, {:status, status}}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  def parse_credits(body) do
+    with {:ok, decoded} <- Poison.decode(to_string(body)),
+         %{"data" => %{"total_credits" => total, "total_usage" => used}} <- decoded do
+      {:ok, %{remaining: total - used, total: total, used: used}}
+    else
+      _other -> {:error, :invalid_response}
+    end
+  end
+
   def call(profile, context, local_action, metadata, config) do
     started_at = System.monotonic_time(:millisecond)
 

@@ -8,7 +8,7 @@ defmodule GameSimulator.Configuration do
   @type auth :: %{data_directory: String.t(), users_file: String.t(), token_ttl_seconds: pos_integer()}
   @type llm :: %{
           enabled: boolean(),
-          shadow_mode: boolean(),
+          mode: :off | :shadow | :llm,
           provider: String.t(),
           api_key: String.t() | nil,
           base_url: String.t(),
@@ -95,6 +95,7 @@ defmodule GameSimulator.Configuration do
     config = Application.fetch_env!(:game_simulator, :llm)
     enabled = Keyword.get(config, :enabled, false)
     shadow_mode = Keyword.get(config, :shadow_mode, true)
+    mode = Keyword.get(config, :mode, if(shadow_mode, do: :shadow, else: :off))
     provider = Keyword.get(config, :provider, "openrouter")
     api_key = Keyword.get(config, :api_key)
     base_url = Keyword.get(config, :base_url, "https://openrouter.ai/api/v1")
@@ -106,8 +107,8 @@ defmodule GameSimulator.Configuration do
     interest_threshold = Keyword.get(config, :interest_threshold, 4)
     client = Keyword.get(config, :client, Poker.Decision.LLMShadow)
 
-    unless is_boolean(enabled) and is_boolean(shadow_mode) do
-      raise ArgumentError, "game_simulator llm enabled and shadow_mode must be booleans"
+    unless is_boolean(enabled) and is_boolean(shadow_mode) and mode in [:off, :shadow, :llm] do
+      raise ArgumentError, "game_simulator llm enabled/shadow_mode/mode configuration is invalid"
     end
 
     unless provider == "openrouter" do
@@ -141,6 +142,7 @@ defmodule GameSimulator.Configuration do
     %{
       enabled: enabled,
       shadow_mode: shadow_mode,
+      mode: mode,
       provider: provider,
       api_key: api_key,
       base_url: base_url,

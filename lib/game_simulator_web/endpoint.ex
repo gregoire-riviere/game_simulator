@@ -58,6 +58,24 @@ defmodule GameSimulatorWeb.Endpoint do
     end
   end
 
+
+  get "/api/llm/credits" do
+    authenticated(conn, fn conn, _user ->
+      config = GameSimulator.Configuration.llm!()
+
+      cond do
+        not config.enabled ->
+          send_json(conn, 200, %{available: false})
+
+        config.provider == "openrouter" ->
+          case Poker.Decision.LLMShadow.credits(config) do
+            {:ok, credits} -> send_json(conn, 200, Map.put(credits, :available, true))
+            {:error, _reason} -> send_json(conn, 200, %{available: true, error: "unavailable"})
+          end
+      end
+    end)
+  end
+
   post "/api/table" do
     # Une seule table temporaire est associée à chaque utilisateur authentifié.
     authenticated(conn, fn conn, user ->
@@ -133,11 +151,11 @@ defmodule GameSimulatorWeb.Endpoint do
     end)
   end
 
-  post "/api/table/llm-shadow" do
+  post "/api/table/llm-mode" do
     authenticated(conn, fn conn, user ->
       with {:ok, table} <- table_for(user),
-           {:ok, enabled} <- parse_boolean(conn.body_params["enabled"]),
-           {:ok, state} <- GameSimulator.Table.set_llm_shadow(table, user, enabled) do
+           {:ok, mode} <- parse_llm_mode(conn.body_params["mode"]),
+           {:ok, state} <- GameSimulator.Table.set_llm_mode(table, user, mode) do
         send_json(conn, 200, state)
       else
         {:error, reason} -> table_error(conn, reason)
@@ -215,8 +233,10 @@ defmodule GameSimulatorWeb.Endpoint do
 
   def parse_count(_value), do: {:error, :invalid_extract_count}
 
-  def parse_boolean(value) when is_boolean(value), do: {:ok, value}
-  def parse_boolean(_value), do: {:error, :invalid_llm_shadow_enabled}
+  def parse_llm_mode("llm"), do: {:ok, :llm}
+  def parse_llm_mode("shadow"), do: {:ok, :shadow}
+  def parse_llm_mode("off"), do: {:ok, :off}
+  def parse_llm_mode(_value), do: {:error, :invalid_llm_mode}
 
   def table_error(conn, :table_not_found), do: send_json(conn, 404, %{error: "table_not_found"})
   def table_error(conn, :forbidden), do: send_json(conn, 403, %{error: "forbidden"})
