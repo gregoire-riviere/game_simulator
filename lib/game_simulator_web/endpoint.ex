@@ -133,6 +133,18 @@ defmodule GameSimulatorWeb.Endpoint do
     end)
   end
 
+  post "/api/table/llm-shadow" do
+    authenticated(conn, fn conn, user ->
+      with {:ok, table} <- table_for(user),
+           {:ok, enabled} <- parse_boolean(conn.body_params["enabled"]),
+           {:ok, state} <- GameSimulator.Table.set_llm_shadow(table, user, enabled) do
+        send_json(conn, 200, state)
+      else
+        {:error, reason} -> table_error(conn, reason)
+      end
+    end)
+  end
+
   delete "/api/table" do
     authenticated(conn, fn conn, user ->
       case GameSimulator.Tables.stop(user) do
@@ -202,6 +214,9 @@ defmodule GameSimulatorWeb.Endpoint do
   end
 
   def parse_count(_value), do: {:error, :invalid_extract_count}
+
+  def parse_boolean(value) when is_boolean(value), do: {:ok, value}
+  def parse_boolean(_value), do: {:error, :invalid_llm_shadow_enabled}
 
   def table_error(conn, :table_not_found), do: send_json(conn, 404, %{error: "table_not_found"})
   def table_error(conn, :forbidden), do: send_json(conn, 403, %{error: "forbidden"})

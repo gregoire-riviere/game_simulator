@@ -58,7 +58,17 @@ outside the release directory. System variables always override file values.
 | `GAME_SIMULATOR_DATA_DIR` | `<project>/data` / temporary test directory | `<release>/data` | Persistent token-signing secret directory. Mount or back up this directory in production. |
 | `GAME_SIMULATOR_USERS_FILE` | `<data-dir>/users` | `<data-dir>/users` | Local user file. Use an absolute path or a path relative to the project/release root. Keep it outside the repository and restrict its permissions. |
 | `GAME_SIMULATOR_TOKEN_TTL_SECONDS` | `3600` | `3600` | Signed token lifetime in seconds; must be greater than zero. |
-| `GAME_SIMULATOR_LLM_API_KEY` | unset | unset | Optional LLM key; it is required only by future LLM calls. |
+| `GAME_SIMULATOR_LLM_ENABLED` | `false` | `false` | Enables LLM shadow decisions when set to `true`. |
+| `GAME_SIMULATOR_LLM_SHADOW_MODE` | `true` | `true` | Keeps LLM decisions observational only. |
+| `GAME_SIMULATOR_LLM_PROVIDER` | `openrouter` | `openrouter` | LLM provider for shadow decisions. |
+| `GAME_SIMULATOR_LLM_API_KEY` | unset | unset | OpenRouter API key; required only when LLM calls are enabled or when running the ping task. |
+| `GAME_SIMULATOR_LLM_BASE_URL` | `https://openrouter.ai/api/v1` | same | OpenRouter-compatible API base URL. |
+| `GAME_SIMULATOR_LLM_DECISION_MODEL` | `google/gemini-2.5-flash` | same | Model used for shadow decisions. |
+| `GAME_SIMULATOR_LLM_TIMEOUT_MS` | `1500` | `1500` | Maximum wait for a shadow decision. |
+| `GAME_SIMULATOR_LLM_INTEREST_THRESHOLD` | `4` | `4` | Minimum spot-interest score before calling the LLM. |
+| `GAME_SIMULATOR_LLM_AUDIT_FILE` | `data/llm_shadow_audit.ndjson` | same | NDJSON audit file for shadow decisions. |
+| `GAME_SIMULATOR_LLM_HTTP_REFERER` | unset | unset | Optional OpenRouter referer header. |
+| `GAME_SIMULATOR_LLM_X_TITLE` | `game_simulator` | same | Optional OpenRouter title header. |
 | `GAME_SIMULATOR_ENV_FILE` | environment-specific default | `<release>/.env` | Optional path to a dotenv file. |
 
 `debug.log` always retains every application log event. `info.log` retains
@@ -75,6 +85,8 @@ GAME_SIMULATOR_LOG_LEVEL=debug
 GAME_SIMULATOR_DATA_DIR=data
 GAME_SIMULATOR_USERS_FILE=data/users
 GAME_SIMULATOR_TOKEN_TTL_SECONDS=3600
+GAME_SIMULATOR_LLM_ENABLED=false
+GAME_SIMULATOR_LLM_SHADOW_MODE=true
 GAME_SIMULATOR_LLM_API_KEY=replace-with-your-key
 ```
 
@@ -82,6 +94,12 @@ Override a local file from the shell without editing it:
 
 ```sh
 GAME_SIMULATOR_PORT=4100 GAME_SIMULATOR_LOG_LEVEL=info mix run --no-halt
+```
+
+Test OpenRouter connectivity without starting a poker hand:
+
+```sh
+GAME_SIMULATOR_LLM_API_KEY=replace-with-your-key mix llm.shadow_ping
 ```
 
 ## Client and authentication API

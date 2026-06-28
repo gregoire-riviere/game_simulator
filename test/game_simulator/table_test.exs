@@ -32,7 +32,29 @@ defmodule GameSimulator.TableTest do
 
     assert {:ok, advanced} = GameSimulator.Table.advance_bot(table, "alice")
     assert length(advanced.recent_actions) == 1
+    assert length(advanced.hand_actions) == 1
     assert {:error, :forbidden} = GameSimulator.Table.advance_bot(table, "mallory")
+  end
+
+  test "keeps the full hand action timeline separate from recent actions" do
+    state = %{owner: "alice", human_id: {:human, "alice"}, profiles: %{}, actions: [], hand_actions: []}
+
+    updated =
+      Enum.reduce(1..10, state, fn _index, state ->
+        GameSimulator.Table.record_action(state, state.human_id, :check)
+      end)
+
+    assert length(updated.actions) == 8
+    assert length(updated.hand_actions) == 10
+  end
+
+  test "can disable LLM shadow mode for the current table" do
+    {:ok, table} = GameSimulator.Table.start_link(owner: "alice")
+
+    assert {:ok, %{llm_shadow_enabled: true}} = GameSimulator.Table.state(table, "alice")
+    assert {:ok, %{llm_shadow_enabled: false}} = GameSimulator.Table.set_llm_shadow(table, "alice", false)
+    assert {:error, :invalid_llm_shadow_enabled} = GameSimulator.Table.set_llm_shadow(table, "alice", "false")
+    assert {:error, :forbidden} = GameSimulator.Table.set_llm_shadow(table, "mallory", true)
   end
 
   test "does not start a new hand when the hero has no chips" do

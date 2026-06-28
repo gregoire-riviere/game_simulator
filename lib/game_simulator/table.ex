@@ -27,6 +27,7 @@ defmodule GameSimulator.Table do
   def advance_bot(table, owner), do: GenServer.call(table, {:advance_bot, owner})
   def next_hand(table, owner), do: GenServer.call(table, {:next_hand, owner})
   def extract(table, owner, count), do: GenServer.call(table, {:extract, owner, count})
+  def set_llm_shadow(table, owner, enabled), do: GenServer.call(table, {:set_llm_shadow, owner, enabled})
 
   @impl true
   def init(options) do
@@ -46,7 +47,7 @@ defmodule GameSimulator.Table do
     {:ok, _state} = Poker.Game.start_hand(game)
 
     profiles = Map.new(Enum.with_index(profiles, 1), fn {profile, seat} -> {{:bot, seat}, profile} end)
-    {:ok, %{owner: owner, game: game, human_id: human_id, profiles: profiles, actions: [], mode: mode}}
+    {:ok, %{owner: owner, game: game, human_id: human_id, profiles: profiles, actions: [], hand_actions: [], llm_shadow_enabled: true, mode: mode}}
   end
 
   @impl true
@@ -74,9 +75,10 @@ defmodule GameSimulator.Table do
          {:ok, %{player_id: id}} <- Poker.Game.next_action(state.game),
          true <- bot?(id),
          {:ok, context} <- Poker.Game.decision_context(state.game, id),
-         action = Poker.Decision.decide(Map.fetch!(state.profiles, id), context),
+         decision = Poker.Decision.Router.decide(Map.fetch!(state.profiles, id), context, decision_metadata(state, id)),
+         action = decision.action,
          {:ok, game_state} <- Poker.Game.act(state.game, id, action) do
-      state = record_action(state, id, action)
+      state = record_action(state, id, action, decision.llm_shadow)
       state = update_profiles(state, game_state)
       reply(state, owner)
     else
@@ -90,7 +92,7 @@ defmodule GameSimulator.Table do
     with :ok <- owner?(state, owner),
          :ok <- hero_has_chips(state),
          {:ok, snapshot} <- Poker.Game.start_hand(state.game) do
-      state = %{state | actions: []} |> record_top_ups(snapshot)
+      state = %{state | actions: [], hand_actions: []} |> record_top_ups(snapshot)
       reply(state, owner)
     else
       {:error, reason} -> {:reply, {:error, reason}, state}
@@ -102,6 +104,23 @@ defmodule GameSimulator.Table do
          {:ok, count} <- valid_extract_count(count),
          {:ok, hands} <- Poker.Game.history(state.game, count) do
       {:reply, {:ok, %{count: length(hands), format: "markdown", text: extract_text(state, hands)}}, state}
+    else
+      {:error, reason} -> {:reply, {:error, reason}, state}
+    end
+  end
+
+  def handle_call({:set_llm_shadow, owner, enabled}, _from, state) when is_boolean(enabled) do
+    with :ok <- owner?(state, owner) do
+      state = %{state | llm_shadow_enabled: enabled}
+      reply(state, owner)
+    else
+      {:error, reason} -> {:reply, {:error, reason}, state}
+    end
+  end
+
+  def handle_call({:set_llm_shadow, owner, _enabled}, _from, state) do
+    with :ok <- owner?(state, owner) do
+      {:reply, {:error, :invalid_llm_shadow_enabled}, state}
     else
       {:error, reason} -> {:reply, {:error, reason}, state}
     end
@@ -119,9 +138,53 @@ defmodule GameSimulator.Table do
     if state.mode == :cash_nl2 or snapshot.players[state.human_id].stack > 0, do: :ok, else: {:error, :hero_busted}
   end
 
-  def record_action(state, id, action) do
-    action = %{player: player_name(state, id), action: action_name(action)}
-    %{state | actions: Enum.take([action | state.actions], 8)}
+  def decision_metadata(state, id) do
+    game_state = Poker.Game.internal_state(state.game)
+    llm_config = GameSimulator.Configuration.llm!()
+
+    %{
+      hand_id: "#{:erlang.phash2(state.owner)}-#{game_state.hand_number}",
+      hand_number: game_state.hand_number,
+      player_id: public_id(state, id),
+      player_name: player_name(state, id),
+      hero_in_hand: hero_in_hand?(game_state, state.human_id),
+      previous_aggressive_action: previous_aggressive_action?(game_state),
+      llm_config: %{llm_config | enabled: llm_config.enabled and state.llm_shadow_enabled}
+    }
+  end
+
+  def hero_in_hand?(game_state, human_id) do
+    MapSet.member?(game_state.hand_players, human_id) and not MapSet.member?(game_state.folded, human_id)
+  end
+
+  def previous_aggressive_action?(%{current_hand_actions: actions}) do
+    case List.last(actions) do
+      %{action: action, amount: amount} -> aggressive_action?(action, amount)
+      _other -> false
+    end
+  end
+
+  def aggressive_action?("all_in", _amount), do: true
+  def aggressive_action?("bet " <> _amount, amount), do: amount >= 0
+  def aggressive_action?("raise_to " <> _amount, amount), do: amount >= 0
+  def aggressive_action?(_action, _amount), do: false
+
+  def record_action(state, id, action), do: record_action(state, id, action, nil)
+
+  def record_action(state, id, action, llm_shadow) do
+    action = action_entry(state, id, action, llm_shadow)
+    %{state | actions: Enum.take([action | state.actions], 8), hand_actions: [action | state.hand_actions]}
+  end
+
+  def action_entry(state, id, action, nil), do: %{player: player_name(state, id), action: action_name(action)}
+
+  def action_entry(state, id, action, llm_shadow) do
+    %{
+      player: player_name(state, id),
+      action: action_name(action),
+      played_action: Poker.Decision.Router.local_action_map(action),
+      llm_shadow: llm_shadow
+    }
   end
 
   def record_top_ups(state, %{top_ups: top_ups}) do
@@ -226,6 +289,7 @@ defmodule GameSimulator.Table do
 
   def public_state(state, owner) do
     {:ok, snapshot} = Poker.Game.public_state(state.game, state.human_id)
+    llm_config = GameSimulator.Configuration.llm!()
 
     players =
       snapshot.players
@@ -258,9 +322,12 @@ defmodule GameSimulator.Table do
       players: players,
       hero_turn: snapshot.active_player == state.human_id,
       hand_finished: snapshot.phase == :waiting,
+      llm_shadow_available: llm_config.enabled,
+      llm_shadow_enabled: state.llm_shadow_enabled,
       last_result: last_result(state, snapshot.phase),
       actions: if(snapshot.active_player == state.human_id, do: Poker.Game.next_action(state.game) |> elem(1) |> Map.fetch!(:actions), else: []),
-      recent_actions: Enum.reverse(state.actions)
+      recent_actions: Enum.reverse(state.actions),
+      hand_actions: Enum.reverse(state.hand_actions)
     }
   end
 

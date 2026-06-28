@@ -21,6 +21,7 @@ const actionPanel = document.getElementById("action-panel");
 const recentActions = document.getElementById("recent-actions");
 const leaveTableButton = document.getElementById("leave-table-button");
 const resetTableButton = document.getElementById("reset-table-button");
+const llmShadowToggle = document.getElementById("llm-shadow-toggle");
 const extractCount = document.getElementById("extract-count");
 const extractButton = document.getElementById("extract-button");
 const extractPanel = document.getElementById("extract-panel");
@@ -230,6 +231,51 @@ function renderResult() {
   }));
 }
 
+function actionText(action) {
+  if (!action) return "";
+  const amount = action.amount === null || action.amount === undefined ? "" : ` ${money(action.amount)}`;
+
+  return `${action.action}${amount}`;
+}
+
+function renderShadow(shadow, playedAction) {
+  if (!shadow || shadow.status !== "available") return null;
+
+  const block = document.createElement("div");
+  block.className = `llm-shadow${shadow.diverged ? " diverged" : ""}`;
+
+  const summary = document.createElement("div");
+  summary.className = "llm-shadow-summary";
+  summary.textContent = `Action jouée : ${actionText(playedAction)} · LLM aurait fait : ${actionText(shadow)} · Divergence : ${shadow.diverged ? "oui" : "non"}`;
+  block.append(summary);
+
+  if (shadow.short_reason) {
+    const reason = document.createElement("p");
+    reason.textContent = shadow.short_reason;
+    block.append(reason);
+  }
+
+  const meta = document.createElement("span");
+  const tags = Array.isArray(shadow.reason_tags) && shadow.reason_tags.length > 0 ? ` · ${shadow.reason_tags.join(", ")}` : "";
+  const confidence = typeof shadow.confidence === "number" ? ` · ${(shadow.confidence * 100).toFixed(0)}%` : "";
+  meta.textContent = `${shadow.model || "LLM"} via ${shadow.provider || "OpenRouter"}${confidence}${tags}`;
+  block.append(meta);
+
+  return block;
+}
+
+function renderActionItem(item) {
+  const line = document.createElement("li");
+  const title = document.createElement("span");
+  title.textContent = `${item.player} : ${item.action}`;
+  line.append(title);
+
+  const shadow = renderShadow(item.llm_shadow, item.played_action);
+  if (shadow) line.append(shadow);
+
+  return line;
+}
+
 function renderTable(nextTable) {
   table = nextTable;
   actionPending = false;
@@ -243,16 +289,22 @@ function renderTable(nextTable) {
   renderPlayers(table.players);
   renderActions();
   renderResult();
-  recentActions.replaceChildren(...table.recent_actions.map((item) => {
-    const line = document.createElement("li");
-    line.textContent = `${item.player} : ${item.action}`;
-    return line;
-  }));
+  renderLlmShadowToggle();
+  recentActions.replaceChildren(...(table.hand_actions || table.recent_actions).map(renderActionItem));
 
   if (!table.hand_finished && !table.hero_turn) {
     // Une requête ne fait jouer qu'un PNJ pour rendre la séquence lisible.
     botTimer = setTimeout(() => advanceBot(), 700);
   }
+}
+
+function renderLlmShadowToggle() {
+  const enabled = Boolean(table.llm_shadow_enabled);
+  const available = Boolean(table.llm_shadow_available);
+  llmShadowToggle.disabled = !available;
+  llmShadowToggle.setAttribute("aria-pressed", String(enabled && available));
+  llmShadowToggle.classList.toggle("off", !enabled || !available);
+  llmShadowToggle.textContent = available ? `Shadow LLM ${enabled ? "on" : "off"}` : "Shadow LLM indispo";
 }
 
 async function submitAction(action) {
@@ -283,6 +335,19 @@ async function nextHand() {
     renderTable(await api("/api/table/next-hand", { method: "POST", body: "{}" }));
   } catch (error) {
     tableStatus.textContent = error.message === "hero_busted" ? "Vous n’avez plus de jetons : quittez la table pour recommencer." : "Impossible de démarrer la main suivante.";
+  }
+}
+
+async function toggleLlmShadow() {
+  if (!table || !table.llm_shadow_available) return;
+
+  llmShadowToggle.disabled = true;
+
+  try {
+    renderTable(await api("/api/table/llm-shadow", { method: "POST", body: JSON.stringify({ enabled: !table.llm_shadow_enabled }) }));
+  } catch (_error) {
+    tableStatus.textContent = "Impossible de modifier le shadow LLM.";
+    renderLlmShadowToggle();
   }
 }
 
@@ -393,6 +458,7 @@ newTableButton.addEventListener("click", async () => {
 
 leaveTableButton.addEventListener("click", leaveTable);
 resetTableButton.addEventListener("click", resetTable);
+llmShadowToggle.addEventListener("click", toggleLlmShadow);
 extractButton.addEventListener("click", extractHands);
 copyExtractButton.addEventListener("click", copyExtract);
 logoutButton.addEventListener("click", logout);

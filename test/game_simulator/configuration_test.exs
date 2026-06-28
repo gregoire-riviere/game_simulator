@@ -25,6 +25,7 @@ defmodule GameSimulator.ConfigurationTest do
     assert %{host: "127.0.0.1", port: 4000} = Configuration.server!()
     assert %{token_ttl_seconds: 86_400} = Configuration.auth!()
     assert is_nil(Configuration.llm_api_key())
+    assert %{enabled: false, shadow_mode: true, interest_threshold: 4} = Configuration.llm!()
   end
 
   test "rejects an invalid server port" do

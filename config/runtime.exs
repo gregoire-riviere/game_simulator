@@ -80,11 +80,42 @@ unless token_ttl_seconds > 0 do
         "GAME_SIMULATOR_TOKEN_TTL_SECONDS must be greater than zero, got: #{inspect(token_ttl_seconds)}"
 end
 
+llm_timeout_ms = env!("GAME_SIMULATOR_LLM_TIMEOUT_MS", :integer, 1_500)
+
+unless llm_timeout_ms > 0 do
+  raise ArgumentError,
+        "GAME_SIMULATOR_LLM_TIMEOUT_MS must be greater than zero, got: #{inspect(llm_timeout_ms)}"
+end
+
+llm_interest_threshold = env!("GAME_SIMULATOR_LLM_INTEREST_THRESHOLD", :integer, 4)
+
+unless llm_interest_threshold > 0 do
+  raise ArgumentError,
+        "GAME_SIMULATOR_LLM_INTEREST_THRESHOLD must be greater than zero, got: #{inspect(llm_interest_threshold)}"
+end
+
+llm_audit_file = env!("GAME_SIMULATOR_LLM_AUDIT_FILE", :string!, "data/llm_shadow_audit.ndjson")
+
+llm_audit_file =
+  if Path.type(llm_audit_file) == :relative, do: Path.expand(llm_audit_file, release_root), else: llm_audit_file
+
 config :game_simulator,
   server: [host: host, port: port],
   logging: [directory: log_dir, console_level: console_log_level],
   auth: [data_directory: data_dir, users_file: users_file, token_ttl_seconds: token_ttl_seconds],
-  llm: [api_key: env!("GAME_SIMULATOR_LLM_API_KEY", :string, nil)]
+  llm: [
+    enabled: env!("GAME_SIMULATOR_LLM_ENABLED", :boolean, false),
+    shadow_mode: env!("GAME_SIMULATOR_LLM_SHADOW_MODE", :boolean, true),
+    provider: env!("GAME_SIMULATOR_LLM_PROVIDER", :string!, "openrouter"),
+    api_key: env!("GAME_SIMULATOR_LLM_API_KEY", :string, nil),
+    base_url: env!("GAME_SIMULATOR_LLM_BASE_URL", :string!, "https://openrouter.ai/api/v1"),
+    decision_model: env!("GAME_SIMULATOR_LLM_DECISION_MODEL", :string!, "google/gemini-2.5-flash"),
+    timeout_ms: llm_timeout_ms,
+    audit_file: llm_audit_file,
+    http_referer: env!("GAME_SIMULATOR_LLM_HTTP_REFERER", :string, nil),
+    x_title: env!("GAME_SIMULATOR_LLM_X_TITLE", :string!, "game_simulator"),
+    interest_threshold: llm_interest_threshold
+  ]
 
 # Keep the primary logger at :debug so debug.log always contains every event.
 config :logger, level: :debug

@@ -6,6 +6,20 @@ defmodule GameSimulator.Configuration do
   @type server :: %{host: String.t(), port: pos_integer()}
   @type logging :: %{directory: String.t(), console_level: Logger.level()}
   @type auth :: %{data_directory: String.t(), users_file: String.t(), token_ttl_seconds: pos_integer()}
+  @type llm :: %{
+          enabled: boolean(),
+          shadow_mode: boolean(),
+          provider: String.t(),
+          api_key: String.t() | nil,
+          base_url: String.t(),
+          decision_model: String.t(),
+          timeout_ms: pos_integer(),
+          audit_file: String.t(),
+          http_referer: String.t() | nil,
+          x_title: String.t(),
+          interest_threshold: pos_integer(),
+          client: module()
+        }
 
   @spec server!() :: server()
   def server! do
@@ -71,9 +85,73 @@ defmodule GameSimulator.Configuration do
 
   @spec llm_api_key() :: String.t() | nil
   def llm_api_key do
-    # La clé est facultative en V1 : le moteur local ne fait aucun appel LLM.
+    # La clé reste facultative tant que le shadow mode LLM n'est pas activé.
     Application.fetch_env!(:game_simulator, :llm)
     |> Keyword.fetch!(:api_key)
+  end
+
+  @spec llm!() :: llm()
+  def llm! do
+    config = Application.fetch_env!(:game_simulator, :llm)
+    enabled = Keyword.get(config, :enabled, false)
+    shadow_mode = Keyword.get(config, :shadow_mode, true)
+    provider = Keyword.get(config, :provider, "openrouter")
+    api_key = Keyword.get(config, :api_key)
+    base_url = Keyword.get(config, :base_url, "https://openrouter.ai/api/v1")
+    decision_model = Keyword.get(config, :decision_model, "google/gemini-2.5-flash")
+    timeout_ms = Keyword.get(config, :timeout_ms, 1_500)
+    audit_file = Keyword.get(config, :audit_file, "data/llm_shadow_audit.ndjson")
+    http_referer = Keyword.get(config, :http_referer)
+    x_title = Keyword.get(config, :x_title, "game_simulator")
+    interest_threshold = Keyword.get(config, :interest_threshold, 4)
+    client = Keyword.get(config, :client, Poker.Decision.LLMShadow)
+
+    unless is_boolean(enabled) and is_boolean(shadow_mode) do
+      raise ArgumentError, "game_simulator llm enabled and shadow_mode must be booleans"
+    end
+
+    unless provider == "openrouter" do
+      raise ArgumentError, "game_simulator llm provider must be openrouter"
+    end
+
+    if enabled and (not is_binary(api_key) or api_key == "") do
+      raise ArgumentError, "game_simulator llm api key must be configured when LLM is enabled"
+    end
+
+    unless is_binary(base_url) and String.starts_with?(base_url, "https://") do
+      raise ArgumentError, "game_simulator llm base_url must be a non-empty https URL"
+    end
+
+    unless is_binary(decision_model) and decision_model != "" do
+      raise ArgumentError, "game_simulator llm decision_model must be a non-empty string"
+    end
+
+    unless is_integer(timeout_ms) and timeout_ms > 0 do
+      raise ArgumentError, "game_simulator llm timeout_ms must be greater than zero"
+    end
+
+    unless is_binary(audit_file) and audit_file != "" do
+      raise ArgumentError, "game_simulator llm audit_file must be a non-empty string"
+    end
+
+    unless is_integer(interest_threshold) and interest_threshold > 0 do
+      raise ArgumentError, "game_simulator llm interest_threshold must be greater than zero"
+    end
+
+    %{
+      enabled: enabled,
+      shadow_mode: shadow_mode,
+      provider: provider,
+      api_key: api_key,
+      base_url: base_url,
+      decision_model: decision_model,
+      timeout_ms: timeout_ms,
+      audit_file: audit_file,
+      http_referer: http_referer,
+      x_title: x_title,
+      interest_threshold: interest_threshold,
+      client: client
+    }
   end
 
   @spec validate!() :: :ok
@@ -81,6 +159,7 @@ defmodule GameSimulator.Configuration do
     _ = server!()
     _ = logging!()
     _ = auth!()
+    _ = llm!()
     :ok
   end
 end
