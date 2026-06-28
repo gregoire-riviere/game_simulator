@@ -63,7 +63,7 @@ outside the release directory. System variables always override file values.
 | `GAME_SIMULATOR_LLM_PROVIDER` | `openrouter` | `openrouter` | LLM provider for shadow decisions. |
 | `GAME_SIMULATOR_LLM_API_KEY` | unset | unset | OpenRouter API key; required only when LLM calls are enabled or when running the ping task. |
 | `GAME_SIMULATOR_LLM_BASE_URL` | `https://openrouter.ai/api/v1` | same | OpenRouter-compatible API base URL. |
-| `GAME_SIMULATOR_LLM_DECISION_MODEL` | `google/gemini-2.5-flash` | same | Model used for shadow decisions. |
+| `GAME_SIMULATOR_LLM_DECISION_MODEL` | `deepseek/deepseek-v4-flash` | same | Model used for shadow decisions. |
 | `GAME_SIMULATOR_LLM_TIMEOUT_MS` | `1500` | `1500` | Maximum wait for a shadow decision. |
 | `GAME_SIMULATOR_LLM_INTEREST_THRESHOLD` | `4` | `4` | Minimum spot-interest score before calling the LLM. |
 | `GAME_SIMULATOR_LLM_AUDIT_FILE` | `data/llm_shadow_audit.ndjson` | same | NDJSON audit file for shadow decisions. |
