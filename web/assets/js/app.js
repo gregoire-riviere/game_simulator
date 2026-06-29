@@ -33,6 +33,8 @@ const handResultReason = document.getElementById("hand-result-reason");
 const handResultWinners = document.getElementById("hand-result-winners");
 let table = null;
 let botTimer = null;
+let tableRetryTimer = null;
+let tableRetrySeconds = 0;
 let actionPending = false;
 
 function showDashboard(user) {
@@ -51,6 +53,30 @@ function showLogin(message = "") {
   table = null;
   actionPending = false;
   clearTimeout(botTimer);
+  clearTableRetry();
+}
+
+function clearTableRetry() {
+  clearInterval(tableRetryTimer);
+  tableRetryTimer = null;
+}
+
+function scheduleTableRetry() {
+  clearTableRetry();
+  tableRetrySeconds = 5;
+  tableStatus.textContent = `Connexion perdue. Nouvelle tentative dans ${tableRetrySeconds} s.`;
+
+  tableRetryTimer = setInterval(() => {
+    tableRetrySeconds -= 1;
+
+    if (tableRetrySeconds <= 0) {
+      clearTableRetry();
+      restoreTable();
+      return;
+    }
+
+    tableStatus.textContent = `Connexion perdue. Nouvelle tentative dans ${tableRetrySeconds} s.`;
+  }, 1000);
 }
 
 function money(cents) {
@@ -79,12 +105,13 @@ async function restoreTable() {
     renderTable(await api("/api/table"));
   } catch (error) {
     if (error.message === "table_not_found") {
+      clearTableRetry();
       tableLobby.hidden = false;
       tableScreen.hidden = true;
       return;
     }
 
-    tableStatus.textContent = "Impossible de récupérer la table.";
+    if (error.message !== "session_expired") scheduleTableRetry();
   }
 }
 
@@ -281,6 +308,7 @@ function renderTable(nextTable) {
   table = nextTable;
   actionPending = false;
   clearTimeout(botTimer);
+  clearTableRetry();
   tableLobby.hidden = true;
   tableScreen.hidden = false;
   tableStatus.textContent = table.hand_finished ? "Main terminée." : table.hero_turn ? "C’est à vous de jouer." : "Action PNJ en cours.";
