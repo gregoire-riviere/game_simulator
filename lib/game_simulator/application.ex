@@ -11,6 +11,8 @@ defmodule GameSimulator.Application do
     %{data_directory: data_directory} = GameSimulator.Configuration.auth!()
     File.mkdir_p!(log_directory)
     File.mkdir_p!(data_directory)
+    :ok = GameSimulator.Database.ensure!()
+    :ok = GameSimulatorWeb.Users.ensure!()
 
     with {:ok, _pid} <- LoggerBackends.add({LoggerFileBackend, :info_log}),
          {:ok, _pid} <- LoggerBackends.add({LoggerFileBackend, :debug_log}) do

@@ -67,11 +67,11 @@ data_dir = env!("GAME_SIMULATOR_DATA_DIR", :string!, default_data_dir)
 data_dir =
   if Path.type(data_dir) == :relative, do: Path.expand(data_dir, release_root), else: data_dir
 
-default_users_file = Path.join(data_dir, "users")
-users_file = env!("GAME_SIMULATOR_USERS_FILE", :string!, default_users_file)
+default_legacy_users_file = Path.join(data_dir, "users")
+legacy_users_file = env!("GAME_SIMULATOR_USERS_FILE", :string!, default_legacy_users_file)
 
-users_file =
-  if Path.type(users_file) == :relative, do: Path.expand(users_file, release_root), else: users_file
+legacy_users_file =
+  if Path.type(legacy_users_file) == :relative, do: Path.expand(legacy_users_file, release_root), else: legacy_users_file
 
 token_ttl_seconds = env!("GAME_SIMULATOR_TOKEN_TTL_SECONDS", :integer, 86_400)
 
@@ -102,7 +102,7 @@ llm_audit_file =
 config :game_simulator,
   server: [host: host, port: port],
   logging: [directory: log_dir, console_level: console_log_level],
-  auth: [data_directory: data_dir, users_file: users_file, token_ttl_seconds: token_ttl_seconds],
+  auth: [data_directory: data_dir, legacy_users_file: legacy_users_file, token_ttl_seconds: token_ttl_seconds],
   llm: [
     enabled: env!("GAME_SIMULATOR_LLM_ENABLED", :boolean, false),
     shadow_mode: env!("GAME_SIMULATOR_LLM_SHADOW_MODE", :boolean, true),

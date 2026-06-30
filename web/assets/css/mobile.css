@@ -3,6 +3,7 @@
 .login-card { min-height: 100vh; min-height: 100dvh; padding: max(2rem, env(safe-area-inset-top)) max(1.5rem, env(safe-area-inset-right)) max(2rem, env(safe-area-inset-bottom)) max(1.5rem, env(safe-area-inset-left)); border: 0; border-radius: 0; box-shadow: none; }
 .app-layout, .app-layout.menu-collapsed { display: block; min-height: 100vh; min-height: 100dvh; }
 .side-menu, .menu-collapsed .side-menu { position: sticky; top: 0; z-index: 1; display: block; width: 100%; padding: max(1rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right)) 1rem max(1rem, env(safe-area-inset-left)); border-right: 0; border-bottom: 1px solid #ffffff1a; }
+.main-area { padding: max(1.5rem, env(safe-area-inset-top)) max(1.25rem, env(safe-area-inset-right)) max(2rem, env(safe-area-inset-bottom)) max(1.25rem, env(safe-area-inset-left)); }
 .menu-header, .menu-collapsed .menu-header { flex-direction: row; align-items: center; }
 .menu-collapse-button { top: max(1rem, env(safe-area-inset-top)); right: max(1rem, env(safe-area-inset-right)); }
 .menu-collapsed .brand-text { display: inline; }
@@ -11,16 +12,17 @@
 .menu-collapsed .nav-section-label, .menu-collapsed .nav-link-text { display: initial; }
 .menu-collapsed .nav-link { justify-content: flex-start; }
 .session-user { margin: 1rem 0 0; }
-.poker-page { padding: max(2rem, env(safe-area-inset-top)) max(1.25rem, env(safe-area-inset-right)) max(2rem, env(safe-area-inset-bottom)) max(1.25rem, env(safe-area-inset-left)); }
+.poker-page { padding: 0; }
 .poker-header { display: block; }
-.user-chip { width: fit-content; margin: -1rem 0 1.5rem auto; }
-.session-actions { justify-content: flex-end; margin: -1rem 0 1.5rem; }
+.user-chip { width: fit-content; }
+.session-actions { justify-content: flex-end; margin: 0 0 1.5rem; }
 .session-actions .user-chip { margin: 0; }
 .card-heading { display: block; }
 .card-heading .primary-button { width: 100%; margin-top: 1.25rem; }
 .game-form { grid-template-columns: 1fr; }
 .game-form .primary-button, .game-form .form-status { grid-column: span 1; }
 .table-toolbar { align-items: flex-start; flex-direction: column; }
+.llm-controls { justify-content: flex-start; }
 .poker-table { min-height: 32rem; border-width: .45rem; border-radius: 2rem; }
 .seat { min-width: 5.4rem; padding: .4rem; font-size: .65rem; }
 .seat-2, .seat-3 { right: 5%; }

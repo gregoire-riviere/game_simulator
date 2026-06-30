@@ -35,9 +35,19 @@
           </div>
           <nav id="app-navigation" aria-label="Navigation principale">
             <p class="nav-section-label">Jeu</p>
-            <button class="nav-link active" type="button" aria-current="page" title="Poker">
+            <button id="poker-nav" class="nav-link active" type="button" aria-current="page" title="Poker" data-view="poker">
               <span aria-hidden="true">♠</span>
               <span class="nav-link-text">Poker</span>
+            </button>
+            <p id="admin-nav-label" class="nav-section-label" hidden>Administration</p>
+            <button id="admin-nav" class="nav-link" type="button" title="Utilisateurs" data-view="admin" hidden>
+              <span aria-hidden="true">⚙</span>
+              <span class="nav-link-text">Utilisateurs</span>
+            </button>
+            <p class="nav-section-label">Compte</p>
+            <button id="account-nav" class="nav-link" type="button" title="Mot de passe" data-view="account">
+              <span aria-hidden="true">●</span>
+              <span class="nav-link-text">Mot de passe</span>
             </button>
           </nav>
           <button id="menu-toggle" class="menu-collapse-button" type="button" aria-expanded="true" aria-controls="app-navigation" aria-label="Réduire le menu">
@@ -45,16 +55,15 @@
           </button>
         </aside>
 
-        <section class="poker-page" aria-labelledby="poker-title">
+        <div class="main-area">
+          <template src="templates/session-actions.html"/>
+
+        <section id="poker-page" class="poker-page content-page" aria-labelledby="poker-title">
           <header class="poker-header">
             <div class="page-heading">
               <p class="eyebrow">Jeu</p>
               <h1 id="poker-title">Poker</h1>
               <p class="intro">Une table NL2 6-max avec cinq joueurs récréatifs.</p>
-            </div>
-            <div class="session-actions">
-              <p class="user-chip"><span aria-hidden="true">●</span><span id="session-user"></span></p>
-              <button id="logout-button" class="logout-button" type="button">Se déconnecter</button>
             </div>
           </header>
 
@@ -75,15 +84,17 @@
             <div class="table-toolbar">
               <p id="table-status" class="form-status" role="status" aria-live="polite"></p>
               <div class="table-toolbar-actions">
-                <label class="extract-count-label" for="extract-count">Mains</label>
-                <input id="extract-count" class="extract-count" type="number" min="1" max="50" value="10" />
-                <button id="extract-button" class="leave-table-button" type="button">Extract LLM</button>
-                <span id="llm-credit" class="llm-credit" title="Crédit OpenRouter restant"></span>
-                <select id="llm-mode-select" class="llm-mode-select" aria-label="Mode LLM">
-                  <option value="llm">LLM</option>
-                  <option value="shadow">LLM shadow</option>
-                  <option value="off">Sans LLM</option>
-                </select>
+                <span id="llm-controls" class="llm-controls">
+                  <label class="extract-count-label" for="extract-count">Mains</label>
+                  <input id="extract-count" class="extract-count" type="number" min="1" max="50" value="10" />
+                  <button id="extract-button" class="leave-table-button" type="button">Extract LLM</button>
+                  <span id="llm-credit" class="llm-credit" title="Crédit OpenRouter restant"></span>
+                  <select id="llm-mode-select" class="llm-mode-select" aria-label="Mode LLM">
+                    <option value="llm">LLM</option>
+                    <option value="shadow">LLM shadow</option>
+                    <option value="off">Sans LLM</option>
+                  </select>
+                </span>
                 <button id="reset-table-button" class="leave-table-button" type="button">Reset table</button>
                 <button id="leave-table-button" class="leave-table-button" type="button">Quitter la table</button>
               </div>
@@ -115,6 +126,75 @@
             </section>
           </section>
         </section>
+
+        <section id="admin-page" class="poker-page content-page" hidden aria-labelledby="admin-title">
+          <header class="poker-header">
+            <div class="page-heading">
+              <p class="eyebrow">Administration</p>
+              <h1 id="admin-title">Utilisateurs</h1>
+              <p class="intro">Gérer les accès à l’application.</p>
+            </div>
+          </header>
+
+          <section class="admin-card" aria-labelledby="create-user-title">
+            <h2 id="create-user-title">Créer un utilisateur</h2>
+            <form id="user-create-form" class="admin-form">
+              <label for="new-username">Utilisateur</label>
+              <input id="new-username" name="username" type="text" autocomplete="off" required />
+              <label for="new-password">Mot de passe</label>
+              <input id="new-password" name="password" type="password" autocomplete="new-password" required />
+              <fieldset class="permissions-field">
+                <legend>Permissions</legend>
+                <label><input name="permissions" type="checkbox" value="admin" /> Admin</label>
+                <label><input name="permissions" type="checkbox" value="poker" checked /> Poker</label>
+                <label><input name="permissions" type="checkbox" value="llm" /> LLM</label>
+              </fieldset>
+              <button class="primary-button" type="submit">Créer <span aria-hidden="true">→</span></button>
+            </form>
+            <p id="admin-status" class="form-status" role="status" aria-live="polite"></p>
+          </section>
+
+          <section class="admin-card" aria-labelledby="users-title">
+            <h2 id="users-title">Comptes</h2>
+            <div class="users-table-wrap">
+              <table class="users-table">
+                <thead>
+                  <tr>
+                    <th>Utilisateur</th>
+                    <th>Permissions</th>
+                    <th>Statut</th>
+                    <th>Nouveau mot de passe</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="users-table-body"></tbody>
+              </table>
+            </div>
+          </section>
+        </section>
+
+        <section id="account-page" class="poker-page content-page" hidden aria-labelledby="account-title">
+          <header class="poker-header">
+            <div class="page-heading">
+              <p class="eyebrow">Compte</p>
+              <h1 id="account-title">Mot de passe</h1>
+              <p class="intro">Modifier le mot de passe de votre session.</p>
+            </div>
+          </header>
+
+          <section class="admin-card" aria-labelledby="password-title">
+            <h2 id="password-title">Changer le mot de passe</h2>
+            <form id="password-form" class="admin-form">
+              <label for="current-password">Mot de passe actuel</label>
+              <input id="current-password" name="current_password" type="password" autocomplete="current-password" required />
+              <label for="new-account-password">Nouveau mot de passe</label>
+              <input id="new-account-password" name="new_password" type="password" autocomplete="new-password" required />
+              <button class="primary-button" type="submit">Mettre à jour <span aria-hidden="true">→</span></button>
+            </form>
+            <p id="password-status" class="form-status" role="status" aria-live="polite"></p>
+          </section>
+        </section>
+        </div>
       </section>
     </main>
     <script src="/js/app.js"></script>

@@ -14,7 +14,7 @@ config :html_handler,
     dir_to_copy: ["web/assets/img"],
     output: "priv/static"
   },
-  templatization?: false,
+  templatization?: true,
   watch?: false,
   seo?: false,
   routes: %{"/" => "index.html"}

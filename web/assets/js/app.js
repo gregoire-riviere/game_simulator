@@ -1,5 +1,6 @@
 // Le token ne vit que dans l'onglet courant : fermer le navigateur déconnecte l'utilisateur.
 const tokenKey = "game-simulator-token";
+const permissionNames = ["admin", "poker", "llm"];
 const appShell = document.querySelector(".app-shell");
 const loginScreen = document.getElementById("login-screen");
 const dashboard = document.getElementById("dashboard");
@@ -9,6 +10,18 @@ const loginSubmit = loginForm.querySelector("button");
 const sessionUser = document.getElementById("session-user");
 const logoutButton = document.getElementById("logout-button");
 const menuToggle = document.getElementById("menu-toggle");
+const pokerNav = document.getElementById("poker-nav");
+const adminNav = document.getElementById("admin-nav");
+const adminNavLabel = document.getElementById("admin-nav-label");
+const accountNav = document.getElementById("account-nav");
+const pokerPage = document.getElementById("poker-page");
+const adminPage = document.getElementById("admin-page");
+const accountPage = document.getElementById("account-page");
+const passwordForm = document.getElementById("password-form");
+const passwordStatus = document.getElementById("password-status");
+const userCreateForm = document.getElementById("user-create-form");
+const adminStatus = document.getElementById("admin-status");
+const usersTableBody = document.getElementById("users-table-body");
 const newTableButton = document.getElementById("new-table-button");
 const tableLobby = document.getElementById("table-lobby");
 const tableScreen = document.getElementById("table-screen");
@@ -21,6 +34,7 @@ const actionPanel = document.getElementById("action-panel");
 const recentActions = document.getElementById("recent-actions");
 const leaveTableButton = document.getElementById("leave-table-button");
 const resetTableButton = document.getElementById("reset-table-button");
+const llmControls = document.getElementById("llm-controls");
 const llmModeSelect = document.getElementById("llm-mode-select");
 const llmCredit = document.getElementById("llm-credit");
 const extractCount = document.getElementById("extract-count");
@@ -31,17 +45,31 @@ const copyExtractButton = document.getElementById("copy-extract-button");
 const handResult = document.getElementById("hand-result");
 const handResultReason = document.getElementById("hand-result-reason");
 const handResultWinners = document.getElementById("hand-result-winners");
+let session = null;
 let table = null;
 let botTimer = null;
 let tableRetryTimer = null;
 let tableRetrySeconds = 0;
 let actionPending = false;
 
-function showDashboard(user) {
-  sessionUser.textContent = user;
+function hasPermission(permission) {
+  return session && Array.isArray(session.permissions) && session.permissions.includes(permission);
+}
+
+function normalizeSession(nextSession) {
+  return {
+    user: nextSession.user,
+    permissions: Array.isArray(nextSession.permissions) ? nextSession.permissions : []
+  };
+}
+
+function showDashboard(nextSession) {
+  session = normalizeSession(nextSession);
+  sessionUser.textContent = session.user;
   appShell.classList.add("dashboard-open");
   loginScreen.hidden = true;
   dashboard.hidden = false;
+  renderAccess();
 }
 
 function showLogin(message = "") {
@@ -50,6 +78,7 @@ function showLogin(message = "") {
   dashboard.hidden = true;
   loginScreen.hidden = false;
   authStatus.textContent = message;
+  session = null;
   table = null;
   actionPending = false;
   clearTimeout(botTimer);
@@ -79,12 +108,42 @@ function scheduleTableRetry() {
   }, 1000);
 }
 
+function defaultView() {
+  if (hasPermission("poker")) return "poker";
+  if (hasPermission("admin")) return "admin";
+  return "account";
+}
+
+function renderAccess() {
+  pokerNav.hidden = !hasPermission("poker");
+  adminNav.hidden = !hasPermission("admin");
+  adminNavLabel.hidden = !hasPermission("admin");
+  llmControls.hidden = !hasPermission("llm");
+  showView(defaultView());
+}
+
+function showView(view) {
+  const allowedView = view === "admin" && !hasPermission("admin") ? defaultView() : view === "poker" && !hasPermission("poker") ? defaultView() : view;
+  const pages = { poker: pokerPage, admin: adminPage, account: accountPage };
+  const navs = { poker: pokerNav, admin: adminNav, account: accountNav };
+
+  Object.entries(pages).forEach(([name, page]) => page.hidden = name !== allowedView);
+  Object.entries(navs).forEach(([name, nav]) => {
+    nav.classList.toggle("active", name === allowedView);
+    if (name === allowedView) nav.setAttribute("aria-current", "page");
+    else nav.removeAttribute("aria-current");
+  });
+
+  if (allowedView === "admin") loadAdminUsers();
+  if (allowedView === "poker") restoreTable();
+}
+
 function money(cents) {
   return `${(cents / 100).toLocaleString("fr-FR", { minimumFractionDigits: 2 })} €`;
 }
 
 async function api(path, options = {}) {
-  // Tous les appels de jeu portent le token ; le serveur reste l'autorité sur les actions.
+  // Tous les appels applicatifs portent le token ; le serveur reste l'autorité sur les droits.
   const response = await fetch(path, {
     ...options,
     headers: { "content-type": "application/json", authorization: `Bearer ${sessionStorage.getItem(tokenKey)}`, ...(options.headers || {}) }
@@ -101,6 +160,8 @@ async function api(path, options = {}) {
 }
 
 async function restoreTable() {
+  if (!hasPermission("poker")) return;
+
   try {
     renderTable(await api("/api/table"));
   } catch (error) {
@@ -120,9 +181,7 @@ async function restoreSession() {
   if (!token) return;
 
   try {
-    const session = await api("/api/auth/me");
-    showDashboard(session.user);
-    restoreTable();
+    showDashboard(await api("/api/auth/me"));
   } catch (_error) {
     if (sessionStorage.getItem(tokenKey)) showLogin("Votre session a expiré, reconnectez-vous pour continuer.");
   }
@@ -267,7 +326,7 @@ function actionText(action) {
 }
 
 function renderShadow(shadow, playedAction, llmApplied = false) {
-  if (!shadow || shadow.status !== "available") return null;
+  if (!hasPermission("llm") || !shadow || shadow.status !== "available") return null;
 
   const block = document.createElement("div");
   block.className = `llm-shadow${shadow.diverged ? " diverged" : ""}`;
@@ -328,6 +387,8 @@ function renderTable(nextTable) {
 }
 
 function renderLlmMode() {
+  if (!hasPermission("llm")) return;
+
   const available = Boolean(table.llm_available);
   llmModeSelect.disabled = !available;
   llmModeSelect.value = available ? (table.llm_mode || "shadow") : "off";
@@ -367,7 +428,7 @@ async function nextHand() {
 }
 
 async function setLlmMode() {
-  if (!table || !table.llm_available) return;
+  if (!hasPermission("llm") || !table || !table.llm_available) return;
 
   llmModeSelect.disabled = true;
 
@@ -426,6 +487,7 @@ async function resetTable() {
 }
 
 async function extractHands() {
+  if (!hasPermission("llm")) return;
   extractButton.disabled = true;
 
   try {
@@ -452,6 +514,151 @@ async function copyExtract() {
   }
 }
 
+function permissionsFromForm(form) {
+  return Array.from(form.querySelectorAll("input[name='permissions']:checked")).map((input) => input.value);
+}
+
+async function loadAdminUsers() {
+  if (!hasPermission("admin")) return;
+
+  try {
+    const data = await api("/api/admin/users");
+    renderAdminUsers(data.users || []);
+  } catch (_error) {
+    adminStatus.textContent = "Impossible de charger les utilisateurs.";
+  }
+}
+
+function permissionControl(permission, checked) {
+  const label = document.createElement("label");
+  const input = document.createElement("input");
+  input.type = "checkbox";
+  input.value = permission;
+  input.checked = checked;
+  label.append(input, document.createTextNode(permission.toUpperCase()));
+  return label;
+}
+
+function lockedLabel(lockedUntil) {
+  if (!lockedUntil) return "Actif";
+
+  const date = new Date(lockedUntil);
+  if (Number.isNaN(date.getTime()) || date <= new Date()) return "Actif";
+  return `Bloqué jusqu’au ${date.toLocaleString("fr-FR")}`;
+}
+
+function renderAdminUsers(users) {
+  usersTableBody.replaceChildren(...users.map((user) => {
+    const row = document.createElement("tr");
+    const nameCell = document.createElement("td");
+    const permissionsCell = document.createElement("td");
+    const statusCell = document.createElement("td");
+    const passwordCell = document.createElement("td");
+    const actionsCell = document.createElement("td");
+    const name = document.createElement("strong");
+    const permissions = document.createElement("div");
+    const password = document.createElement("input");
+    const actions = document.createElement("div");
+    const save = document.createElement("button");
+    const remove = document.createElement("button");
+
+    name.textContent = user.username;
+    nameCell.append(name);
+    permissions.className = "row-permissions";
+    permissionNames.forEach((permission) => permissions.append(permissionControl(permission, user.permissions.includes(permission))));
+    permissionsCell.append(permissions);
+    statusCell.textContent = lockedLabel(user.locked_until);
+    password.type = "password";
+    password.placeholder = "Reset optionnel";
+    password.autocomplete = "new-password";
+    passwordCell.append(password);
+    actions.className = "row-actions";
+    save.type = "button";
+    save.textContent = "Enregistrer";
+    save.onclick = () => saveUser(user.username, permissions, password);
+    remove.type = "button";
+    remove.textContent = "Supprimer";
+    remove.onclick = () => deleteUser(user.username);
+    actions.append(save);
+    if (lockedLabel(user.locked_until) !== "Actif") {
+      const unlock = document.createElement("button");
+      unlock.type = "button";
+      unlock.textContent = "Débloquer";
+      unlock.onclick = () => unlockUser(user.username, permissions, password);
+      actions.append(unlock);
+    }
+    actions.append(remove);
+    actionsCell.append(actions);
+    row.append(nameCell, permissionsCell, statusCell, passwordCell, actionsCell);
+    return row;
+  }));
+}
+
+async function saveUser(username, permissionsNode, passwordInput) {
+  const permissions = Array.from(permissionsNode.querySelectorAll("input:checked")).map((input) => input.value);
+  const body = { permissions };
+  if (passwordInput.value) body.password = passwordInput.value;
+
+  try {
+    await api(`/api/admin/users/${encodeURIComponent(username)}`, { method: "PUT", body: JSON.stringify(body) });
+    adminStatus.textContent = "Utilisateur mis à jour.";
+    adminStatus.classList.add("success");
+    loadAdminUsers();
+  } catch (error) {
+    adminStatus.classList.remove("success");
+    adminStatus.textContent = error.message === "last_admin" ? "Impossible de retirer le dernier admin." : "Impossible de mettre à jour cet utilisateur.";
+  }
+}
+
+async function unlockUser(username, permissionsNode, passwordInput) {
+  const permissions = Array.from(permissionsNode.querySelectorAll("input:checked")).map((input) => input.value);
+  const body = { permissions, unlock: true };
+  if (passwordInput.value) body.password = passwordInput.value;
+
+  try {
+    await api(`/api/admin/users/${encodeURIComponent(username)}`, { method: "PUT", body: JSON.stringify(body) });
+    adminStatus.textContent = "Utilisateur débloqué.";
+    adminStatus.classList.add("success");
+    loadAdminUsers();
+  } catch (_error) {
+    adminStatus.classList.remove("success");
+    adminStatus.textContent = "Impossible de débloquer cet utilisateur.";
+  }
+}
+
+async function deleteUser(username) {
+  if (!confirm(`Supprimer définitivement l'utilisateur "${username}" ?`)) return;
+
+  try {
+    await api(`/api/admin/users/${encodeURIComponent(username)}`, { method: "DELETE" });
+    adminStatus.textContent = "Utilisateur supprimé.";
+    adminStatus.classList.add("success");
+    loadAdminUsers();
+  } catch (error) {
+    adminStatus.classList.remove("success");
+    adminStatus.textContent = error.message === "last_admin" ? "Impossible de supprimer le dernier admin." : "Impossible de supprimer cet utilisateur.";
+  }
+}
+
+function passwordErrorMessage(error) {
+  return {
+    missing_current_password: "Renseignez votre mot de passe actuel.",
+    missing_new_password: "Renseignez un nouveau mot de passe.",
+    invalid_current_password: "Le mot de passe actuel est incorrect.",
+    invalid_new_password: "Le nouveau mot de passe doit contenir au moins 12 caractères et ne pas contenir de retour à la ligne.",
+    password_update_failed: "Erreur serveur pendant la mise à jour du mot de passe."
+  }[error.message] || "Impossible de modifier le mot de passe.";
+}
+
+function loginErrorMessage(error) {
+  if (error.message !== "locked") return "Utilisateur ou mot de passe incorrect.";
+  if (!error.lockedUntil) return "Compte bloqué pendant 12 heures après 5 échecs. Contactez un admin pour le débloquer.";
+
+  const date = new Date(error.lockedUntil);
+  if (Number.isNaN(date.getTime())) return "Compte bloqué pendant 12 heures après 5 échecs. Contactez un admin pour le débloquer.";
+  return `Compte bloqué jusqu’au ${date.toLocaleString("fr-FR")}. Contactez un admin pour le débloquer.`;
+}
+
 async function logout() {
   try {
     await api("/api/auth/logout", { method: "POST", body: "{}" });
@@ -469,13 +676,17 @@ loginForm.addEventListener("submit", async (event) => {
 
   try {
     const response = await fetch("/api/auth/login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(Object.fromEntries(new FormData(loginForm))) });
-    if (!response.ok) throw new Error("invalid_credentials");
-    const session = await response.json();
-    sessionStorage.setItem(tokenKey, session.token);
-    showDashboard(session.user);
-    restoreTable();
-  } catch (_error) {
-    authStatus.textContent = "Utilisateur ou mot de passe incorrect.";
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      const error = new Error(body.error || "invalid_credentials");
+      error.lockedUntil = body.locked_until;
+      throw error;
+    }
+    const nextSession = await response.json();
+    sessionStorage.setItem(tokenKey, nextSession.token);
+    showDashboard(nextSession);
+  } catch (error) {
+    authStatus.textContent = loginErrorMessage(error);
   } finally {
     loginSubmit.disabled = false;
   }
@@ -485,6 +696,43 @@ menuToggle.addEventListener("click", () => {
   const collapsed = dashboard.classList.toggle("menu-collapsed");
   menuToggle.setAttribute("aria-expanded", String(!collapsed));
   menuToggle.querySelector("span").textContent = collapsed ? "›" : "‹";
+});
+
+[pokerNav, adminNav, accountNav].forEach((nav) => nav.addEventListener("click", () => showView(nav.dataset.view)));
+
+passwordForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  passwordStatus.textContent = "";
+
+  try {
+    await api("/api/auth/password", { method: "POST", body: JSON.stringify(Object.fromEntries(new FormData(passwordForm))) });
+    passwordForm.reset();
+    passwordStatus.classList.add("success");
+    passwordStatus.textContent = "Mot de passe mis à jour.";
+  } catch (error) {
+    passwordStatus.classList.remove("success");
+    passwordStatus.textContent = passwordErrorMessage(error);
+  }
+});
+
+userCreateForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  adminStatus.textContent = "";
+
+  const body = Object.fromEntries(new FormData(userCreateForm));
+  body.permissions = permissionsFromForm(userCreateForm);
+
+  try {
+    await api("/api/admin/users", { method: "POST", body: JSON.stringify(body) });
+    userCreateForm.reset();
+    userCreateForm.querySelector("input[value='poker']").checked = true;
+    adminStatus.classList.add("success");
+    adminStatus.textContent = "Utilisateur créé.";
+    loadAdminUsers();
+  } catch (error) {
+    adminStatus.classList.remove("success");
+    adminStatus.textContent = error.message === "already_exists" ? "Cet utilisateur existe déjà." : "Impossible de créer cet utilisateur.";
+  }
 });
 
 newTableButton.addEventListener("click", async () => {

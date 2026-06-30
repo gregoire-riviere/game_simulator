@@ -50,7 +50,7 @@ defmodule GameSimulator.ConfigurationTest do
   test "rejects an invalid token TTL" do
     Application.put_env(:game_simulator, :auth,
       data_directory: System.tmp_dir!(),
-      users_file: Path.join(System.tmp_dir!(), "game_simulator-users"),
+      legacy_users_file: Path.join(System.tmp_dir!(), "game_simulator-users"),
       token_ttl_seconds: 0
     )
 

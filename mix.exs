@@ -25,6 +25,7 @@ defmodule GameSimulator.MixProject do
       {:llm_composer, "~> 0.19.5"},
       {:poison, "~> 5.0"},
       {:plug_cowboy, "~> 2.8"},
+      {:exqlite, "~> 0.33"},
       {:logger_file_backend, "~> 0.0.14"},
       {:logger_backends, "~> 1.0"},
       {:dotenvy, "~> 1.1"},
