@@ -8,6 +8,8 @@ defmodule GameSimulator.Table do
 
   use GenServer
 
+  @default_game_key "poker:cash_nl2"
+
   def child_spec(options) do
     %{
       id: __MODULE__,
@@ -33,6 +35,39 @@ defmodule GameSimulator.Table do
   def init(options) do
     # La table V1 est toujours 6-max : le héros reçoit le siège 6, les PNJ les autres.
     owner = Keyword.fetch!(options, :owner)
+    game_key = Keyword.get(options, :game_key, @default_game_key)
+    autosave = Keyword.get(options, :autosave, false)
+
+    case Keyword.fetch(options, :snapshot) do
+      {:ok, snapshot} -> init_from_snapshot(owner, game_key, autosave, snapshot)
+      :error -> init_new_table(options, owner, game_key, autosave)
+    end
+  end
+
+  def init_from_snapshot(owner, game_key, autosave, %{owner: owner, game_state: game_state} = snapshot) do
+    {:ok, game} = Poker.Game.start_link(state: game_state)
+
+    {:ok,
+     %{
+       owner: owner,
+       game: game,
+       human_id: Map.fetch!(snapshot, :human_id),
+       profiles: Map.fetch!(snapshot, :profiles),
+       actions: Map.get(snapshot, :actions, []),
+       hand_actions: Map.get(snapshot, :hand_actions, []),
+       hud_stats: Map.get(snapshot, :hud_stats, %{}),
+       hud_hand: Map.get(snapshot, :hud_hand, %{}),
+       llm_mode: Map.get(snapshot, :llm_mode, :shadow),
+       mode: Map.get(snapshot, :mode, :cash_nl2),
+       game_key: game_key,
+       autosave: autosave,
+       saving?: false
+     }}
+  end
+
+  def init_from_snapshot(_owner, _game_key, _autosave, _snapshot), do: {:stop, :invalid_save}
+
+  def init_new_table(options, owner, game_key, autosave) do
     mode = Keyword.get(options, :mode, :cash_nl2)
     provider = Keyword.get(options, :profile_provider, Poker.LocalProfileProvider)
     {:ok, game} = Poker.Game.start_link(small_blind: 1, big_blind: 2, mode: mode, min_stack: 80, top_up_to: 200)
@@ -48,7 +83,8 @@ defmodule GameSimulator.Table do
 
     profiles = Map.new(Enum.with_index(profiles, 1), fn {profile, seat} -> {{:bot, seat}, profile} end)
     hud_stats = snapshot |> empty_hud_stats() |> count_hud_hand(snapshot)
-    {:ok, %{owner: owner, game: game, human_id: human_id, profiles: profiles, actions: [], hand_actions: [], hud_stats: hud_stats, hud_hand: %{}, llm_mode: :shadow, mode: mode}}
+    state = %{owner: owner, game: game, human_id: human_id, profiles: profiles, actions: [], hand_actions: [], hud_stats: hud_stats, hud_hand: %{}, llm_mode: :shadow, mode: mode, game_key: game_key, autosave: autosave, saving?: false}
+    {:ok, maybe_save_async(state)}
   end
 
   @impl true
@@ -64,6 +100,7 @@ defmodule GameSimulator.Table do
          {:ok, game_state} <- Poker.Game.act(state.game, state.human_id, action) do
       state = record_action(state, state.human_id, action)
       state = update_profiles(state, game_state)
+      state = maybe_save_async(state)
       reply(state, owner)
     else
       {:error, reason} -> {:reply, {:error, reason}, state}
@@ -81,6 +118,7 @@ defmodule GameSimulator.Table do
          {:ok, game_state} <- Poker.Game.act(state.game, id, action) do
       state = record_action(state, id, action, decision.llm_shadow, decision.local_action, decision.llm_applied)
       state = update_profiles(state, game_state)
+      state = maybe_save_async(state)
       reply(state, owner)
     else
       false -> {:reply, {:error, :human_action_required}, state}
@@ -94,6 +132,7 @@ defmodule GameSimulator.Table do
          :ok <- hero_has_chips(state),
          {:ok, snapshot} <- Poker.Game.start_hand(state.game) do
       state = %{state | actions: [], hand_actions: [], hud_hand: %{}} |> count_hud_hand(snapshot) |> record_top_ups(snapshot)
+      state = maybe_save_async(state)
       reply(state, owner)
     else
       {:error, reason} -> {:reply, {:error, reason}, state}
@@ -112,7 +151,7 @@ defmodule GameSimulator.Table do
 
   def handle_call({:set_llm_mode, owner, mode}, _from, state) when mode in [:llm, :shadow, :off] do
     with :ok <- owner?(state, owner) do
-      state = %{state | llm_mode: mode}
+      state = %{state | llm_mode: mode} |> maybe_save_async()
       reply(state, owner)
     else
       {:error, reason} -> {:reply, {:error, reason}, state}
@@ -125,6 +164,42 @@ defmodule GameSimulator.Table do
     else
       {:error, reason} -> {:reply, {:error, reason}, state}
     end
+  end
+
+  @impl true
+  def handle_info({:save_finished, _result}, state), do: {:noreply, %{state | saving?: false}}
+
+  def maybe_save_async(%{autosave: true, saving?: false} = state) do
+    table = self()
+    snapshot = save_snapshot(state)
+    owner = state.owner
+    game_key = state.game_key
+
+    case Task.start(fn ->
+           result = GameSimulator.GameSaves.put(owner, game_key, snapshot)
+           send(table, {:save_finished, result})
+         end) do
+      {:ok, _pid} -> %{state | saving?: true}
+      {:error, _reason} -> state
+    end
+  end
+
+  def maybe_save_async(state), do: state
+
+  def save_snapshot(state) do
+    %{
+      version: 1,
+      owner: state.owner,
+      game_state: Poker.Game.internal_state(state.game),
+      human_id: state.human_id,
+      profiles: state.profiles,
+      actions: state.actions,
+      hand_actions: state.hand_actions,
+      hud_stats: state.hud_stats,
+      hud_hand: state.hud_hand,
+      llm_mode: state.llm_mode,
+      mode: state.mode
+    }
   end
 
   def reply(state, owner), do: {:reply, {:ok, public_state(state, owner)}, state}

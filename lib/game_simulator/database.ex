@@ -20,6 +20,7 @@ defmodule GameSimulator.Database do
       {:ok, conn} ->
         :ok = Exqlite.Sqlite3.execute(conn, "PRAGMA foreign_keys = ON")
         :ok = Exqlite.Sqlite3.execute(conn, users_table_sql())
+        :ok = Exqlite.Sqlite3.execute(conn, game_saves_table_sql())
         :ok = ensure_column(conn, "users", "failed_login_count", "INTEGER NOT NULL DEFAULT 0")
         :ok = ensure_column(conn, "users", "locked_until", "TEXT")
         :ok = Exqlite.Sqlite3.close(conn)
@@ -104,6 +105,20 @@ defmodule GameSimulator.Database do
       locked_until TEXT,
       inserted_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
+    )
+    """
+  end
+
+  def game_saves_table_sql do
+    """
+    CREATE TABLE IF NOT EXISTS game_saves (
+      username TEXT NOT NULL,
+      game_key TEXT NOT NULL,
+      payload BLOB NOT NULL,
+      version INTEGER NOT NULL,
+      inserted_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY (username, game_key)
     )
     """
   end

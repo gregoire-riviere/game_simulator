@@ -134,13 +134,34 @@ defmodule GameSimulatorWeb.Endpoint do
     end)
   end
 
-  post "/api/table" do
-    # Une seule table temporaire est associée à chaque utilisateur authentifié.
+  get "/api/table/save" do
     authenticated(conn, "poker", fn conn, account ->
-      with {:ok, table} <- GameSimulator.Tables.start(account.username),
+      case GameSimulator.Tables.save_status(account.username) do
+        {:ok, has_save} -> send_json(conn, 200, %{has_save: has_save})
+        {:error, _reason} -> send_json(conn, 500, %{error: "save_status_unavailable"})
+      end
+    end)
+  end
+
+  post "/api/table" do
+    # Nouvelle partie : la sauvegarde unique sera écrasée par le premier snapshot.
+    authenticated(conn, "poker", fn conn, account ->
+      with {:ok, table} <- GameSimulator.Tables.start_new(account.username),
            {:ok, state} <- GameSimulator.Table.state(table, account.username) do
         send_table_json(conn, 201, state, account)
       else
+        {:error, reason} -> table_error(conn, reason)
+      end
+    end)
+  end
+
+  post "/api/table/resume" do
+    authenticated(conn, "poker", fn conn, account ->
+      with {:ok, table} <- GameSimulator.Tables.resume(account.username),
+           {:ok, state} <- GameSimulator.Table.state(table, account.username) do
+        send_table_json(conn, 200, state, account)
+      else
+        {:error, :not_found} -> send_json(conn, 404, %{error: "save_not_found"})
         {:error, reason} -> table_error(conn, reason)
       end
     end)

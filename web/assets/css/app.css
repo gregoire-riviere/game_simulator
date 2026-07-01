@@ -58,6 +58,7 @@ button:disabled { cursor: wait; opacity: .65; }
 .card-heading p, .game-summary p { color: #aab4ca; }
 .card-heading p { margin: .5rem 0 0; }
 .card-heading .primary-button { width: auto; min-width: 11rem; margin: 0; }
+.lobby-actions { display: flex; align-items: stretch; gap: .6rem; flex-wrap: wrap; justify-content: flex-end; }
 .game-form { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 1.5rem; }
 .game-form .primary-button { grid-column: span 2; }
 .game-form .form-status { grid-column: span 2; margin-top: 0; }

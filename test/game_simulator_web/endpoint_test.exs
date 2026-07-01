@@ -197,6 +197,75 @@ defmodule GameSimulatorWeb.EndpointTest do
     assert Enum.all?(Enum.reject(players, &(&1["id"] == "hero")), &(&1["cards"] == "hidden"))
   end
 
+  test "reports save status and resumes a saved table" do
+    user = "save-user-#{System.unique_integer([:positive])}"
+    assert :ok = Users.add(user, "a-long-test-password", ["poker"])
+    {:ok, token, _expiration} = Auth.issue_token(user)
+
+    no_save =
+      conn(:get, "/api/table/save")
+      |> put_req_header("authorization", "Bearer #{token}")
+      |> then(&Endpoint.call(&1, Endpoint.init([])))
+
+    assert no_save.status == 200
+    assert %{"has_save" => false} = Poison.decode!(no_save.resp_body)
+
+    created =
+      conn(:post, "/api/table", %{})
+      |> put_req_header("authorization", "Bearer #{token}")
+      |> then(&Endpoint.call(&1, Endpoint.init([])))
+
+    assert created.status == 201
+    assert wait_until(fn -> match?({:ok, true}, GameSimulator.Tables.save_status(user)) end)
+
+    stopped =
+      conn(:delete, "/api/table")
+      |> put_req_header("authorization", "Bearer #{token}")
+      |> then(&Endpoint.call(&1, Endpoint.init([])))
+
+    assert stopped.status == 204
+
+    has_save =
+      conn(:get, "/api/table/save")
+      |> put_req_header("authorization", "Bearer #{token}")
+      |> then(&Endpoint.call(&1, Endpoint.init([])))
+
+    assert has_save.status == 200
+    assert %{"has_save" => true} = Poison.decode!(has_save.resp_body)
+
+    resumed =
+      conn(:post, "/api/table/resume", %{})
+      |> put_req_header("authorization", "Bearer #{token}")
+      |> then(&Endpoint.call(&1, Endpoint.init([])))
+
+    assert resumed.status == 200
+    assert %{"hand_number" => 1, "players" => players} = Poison.decode!(resumed.resp_body)
+    assert length(players) == 6
+  end
+
+  test "resume returns 404 without a save and never uses another user's save" do
+    assert :ok = Users.add("owner", "a-long-test-password", ["poker"])
+    assert :ok = Users.add("other", "a-long-test-password", ["poker"])
+    {:ok, owner_token, _expiration} = Auth.issue_token("owner")
+    {:ok, other_token, _expiration} = Auth.issue_token("other")
+
+    created =
+      conn(:post, "/api/table", %{})
+      |> put_req_header("authorization", "Bearer #{owner_token}")
+      |> then(&Endpoint.call(&1, Endpoint.init([])))
+
+    assert created.status == 201
+    assert wait_until(fn -> match?({:ok, true}, GameSimulator.Tables.save_status("owner")) end)
+
+    missing =
+      conn(:post, "/api/table/resume", %{})
+      |> put_req_header("authorization", "Bearer #{other_token}")
+      |> then(&Endpoint.call(&1, Endpoint.init([])))
+
+    assert missing.status == 404
+    assert %{"error" => "save_not_found"} = Poison.decode!(missing.resp_body)
+  end
+
   test "requires poker permission for table endpoints" do
     assert :ok = Users.add("llm-user", "a-long-test-password", ["llm"])
     {:ok, token, _expiration} = Auth.issue_token("llm-user")
@@ -253,4 +322,17 @@ defmodule GameSimulatorWeb.EndpointTest do
     assert response.status == 204
     assert :error = GameSimulator.Tables.table(user)
   end
+
+  def wait_until(fun), do: wait_until(fun, 20)
+
+  def wait_until(fun, attempts) when attempts > 0 do
+    if fun.() do
+      true
+    else
+      Process.sleep(25)
+      wait_until(fun, attempts - 1)
+    end
+  end
+
+  def wait_until(_fun, 0), do: false
 end

@@ -70,12 +70,17 @@
           <section id="table-lobby" class="new-game-card" aria-labelledby="new-game-title">
             <div class="card-heading">
               <div>
-                <h2 id="new-game-title">Nouvelle table NL2</h2>
+                <h2 id="new-game-title">Partie NL2</h2>
                 <p>6-max · blindes 0,01 € / 0,02 € · caves de 100bb.</p>
               </div>
-              <button id="new-table-button" class="primary-button" type="button">
-                Lancer la table <span aria-hidden="true">→</span>
-              </button>
+              <div class="lobby-actions">
+                <button id="resume-table-button" class="primary-button" type="button" hidden>
+                  Reprendre <span aria-hidden="true">→</span>
+                </button>
+                <button id="new-table-button" class="primary-button" type="button">
+                  Nouvelle partie <span aria-hidden="true">→</span>
+                </button>
+              </div>
             </div>
           </section>
 
@@ -97,7 +102,7 @@
                     <option value="off">Sans LLM</option>
                   </select>
                 </span>
-                <button id="reset-table-button" class="leave-table-button" type="button">Reset table</button>
+                <button id="reset-table-button" class="leave-table-button" type="button">Nouvelle partie</button>
                 <button id="leave-table-button" class="leave-table-button" type="button">Quitter la table</button>
               </div>
             </div>

@@ -19,6 +19,8 @@
 .session-actions .user-chip { margin: 0; }
 .card-heading { display: block; }
 .card-heading .primary-button { width: 100%; margin-top: 1.25rem; }
+.lobby-actions { display: grid; grid-template-columns: 1fr; gap: .65rem; margin-top: 1.25rem; }
+.lobby-actions .primary-button { margin-top: 0; }
 .game-form { grid-template-columns: 1fr; }
 .game-form .primary-button, .game-form .form-status { grid-column: span 1; }
 .table-toolbar { grid-template-columns: 1fr; align-items: stretch; gap: .65rem; margin-inline: -.25rem; padding: .65rem; }

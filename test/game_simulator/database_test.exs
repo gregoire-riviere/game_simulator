@@ -36,6 +36,15 @@ defmodule GameSimulator.DatabaseTest do
              end)
   end
 
+  test "ensure! creates the game saves table" do
+    assert :ok = Database.ensure!()
+
+    assert {:ok, [["game_saves"]]} =
+             Database.with_connection(fn conn ->
+               Database.query(conn, "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?", ["game_saves"])
+             end)
+  end
+
   test "ensure! creates login lock columns" do
     assert :ok = Database.ensure!()
 

@@ -25,6 +25,13 @@ defmodule Poker.Game do
 
   @impl true
   def init(options) do
+    case Keyword.fetch(options, :state) do
+      {:ok, state} -> if is_map(state), do: {:ok, state}, else: {:stop, :invalid_state}
+      :error -> init_new(options)
+    end
+  end
+
+  def init_new(options) do
     small_blind = Keyword.get(options, :small_blind)
     big_blind = Keyword.get(options, :big_blind)
     mode = Keyword.get(options, :mode, :elimination)

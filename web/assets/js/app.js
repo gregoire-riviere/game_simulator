@@ -23,6 +23,7 @@ const userCreateForm = document.getElementById("user-create-form");
 const adminStatus = document.getElementById("admin-status");
 const usersTableBody = document.getElementById("users-table-body");
 const newTableButton = document.getElementById("new-table-button");
+const resumeTableButton = document.getElementById("resume-table-button");
 const tableLobby = document.getElementById("table-lobby");
 const tableScreen = document.getElementById("table-screen");
 const tableStatus = document.getElementById("table-status");
@@ -169,10 +170,22 @@ async function restoreTable() {
       clearTableRetry();
       tableLobby.hidden = false;
       tableScreen.hidden = true;
+      refreshSaveStatus();
       return;
     }
 
     if (error.message !== "session_expired") scheduleTableRetry();
+  }
+}
+
+async function refreshSaveStatus() {
+  if (!hasPermission("poker")) return;
+
+  try {
+    const status = await api("/api/table/save");
+    resumeTableButton.hidden = !status.has_save;
+  } catch (_error) {
+    resumeTableButton.hidden = true;
   }
 }
 
@@ -489,6 +502,7 @@ async function leaveTable() {
     clearExtract();
     tableScreen.hidden = true;
     tableLobby.hidden = false;
+    refreshSaveStatus();
   } catch (_error) {
     tableStatus.textContent = "Impossible de quitter la table.";
   }
@@ -502,9 +516,38 @@ async function resetTable() {
     clearExtract();
     renderTable(await api("/api/table", { method: "POST", body: "{}" }));
   } catch (_error) {
-    tableStatus.textContent = "Impossible de reset la table.";
+    tableStatus.textContent = "Impossible de démarrer une nouvelle partie.";
   } finally {
     resetTableButton.disabled = false;
+  }
+}
+
+async function createNewTable() {
+  newTableButton.disabled = true;
+  resumeTableButton.disabled = true;
+
+  try {
+    renderTable(await api("/api/table", { method: "POST", body: "{}" }));
+  } catch (_error) {
+    tableStatus.textContent = "Impossible de créer la table.";
+  } finally {
+    newTableButton.disabled = false;
+    resumeTableButton.disabled = false;
+  }
+}
+
+async function resumeTable() {
+  resumeTableButton.disabled = true;
+  newTableButton.disabled = true;
+
+  try {
+    renderTable(await api("/api/table/resume", { method: "POST", body: "{}" }));
+  } catch (_error) {
+    tableStatus.textContent = "Aucune partie à reprendre.";
+    refreshSaveStatus();
+  } finally {
+    resumeTableButton.disabled = false;
+    newTableButton.disabled = false;
   }
 }
 
@@ -757,16 +800,8 @@ userCreateForm.addEventListener("submit", async (event) => {
   }
 });
 
-newTableButton.addEventListener("click", async () => {
-  newTableButton.disabled = true;
-  try {
-    renderTable(await api("/api/table", { method: "POST", body: "{}" }));
-  } catch (_error) {
-    tableStatus.textContent = "Impossible de créer la table.";
-  } finally {
-    newTableButton.disabled = false;
-  }
-});
+newTableButton.addEventListener("click", createNewTable);
+resumeTableButton.addEventListener("click", resumeTable);
 
 leaveTableButton.addEventListener("click", leaveTable);
 resetTableButton.addEventListener("click", resetTable);

@@ -67,6 +67,22 @@ defmodule GameSimulator.TableTest do
     assert {:error, :forbidden} = GameSimulator.Table.set_llm_mode(table, "mallory", :shadow)
   end
 
+  test "restores a table snapshot without changing public state" do
+    {:ok, table} = GameSimulator.Table.start_link(owner: "alice")
+    assert {:ok, _state} = GameSimulator.Table.advance_bot(table, "alice")
+    assert {:ok, before} = GameSimulator.Table.set_llm_mode(table, "alice", :off)
+
+    snapshot = table |> :sys.get_state() |> GameSimulator.Table.save_snapshot()
+    {:ok, restored} = GameSimulator.Table.start_link(owner: "alice", snapshot: snapshot)
+
+    assert {:ok, after_restore} = GameSimulator.Table.state(restored, "alice")
+    assert after_restore.hand_number == before.hand_number
+    assert after_restore.players == before.players
+    assert after_restore.recent_actions == before.recent_actions
+    assert after_restore.hand_actions == before.hand_actions
+    assert after_restore.llm_mode == :off
+  end
+
   test "does not start a new hand when the hero has no chips" do
     {:ok, table} = GameSimulator.Table.start_link(owner: "alice", mode: :elimination)
     state = :sys.get_state(table)
