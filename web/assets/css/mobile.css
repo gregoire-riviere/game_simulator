@@ -36,18 +36,18 @@
 .table-action { width: 100%; max-width: none; min-height: 3.1rem; padding: .7rem .65rem; font-size: .95rem; }
 .action-icon { flex-basis: 1.5rem; width: 1.5rem; height: 1.5rem; }
 .pot { top: 45%; z-index: 1; }
-.board { top: 56%; gap: .25rem; }
-.card { width: 1.65rem; height: 2.3rem; font-size: .78rem; }
-.seat { width: 32%; min-width: 0; max-width: 7.2rem; padding: .35rem; font-size: .62rem; }
+.board { top: 56%; gap: .18rem; z-index: 2; }
+.card { width: 1.35rem; height: 2rem; font-size: .66rem; }
+.seat { width: 29%; min-width: 0; max-width: 6.3rem; padding: .3rem; font-size: .56rem; z-index: 1; }
 .seat-status { min-height: 0; }
-.hole-cards .card { width: 1.35rem; height: 1.85rem; font-size: .62rem; }
+.hole-cards .card { width: 1.15rem; height: 1.65rem; font-size: .56rem; }
 .seat-hud { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .08rem; margin-top: .15rem; padding-top: .15rem; }
 .seat-hud span { display: block; text-align: center; font-size: .48rem; }
 .seat-hud small { display: block; font-size: .42rem; }
 .seat-hud strong { display: block; font-size: .5rem; }
 .seat-1 { top: 4%; left: 50%; transform: translateX(-50%); }
 .seat-2 { top: 23%; right: 3%; }
-.seat-3 { bottom: 23%; right: 3%; }
+.seat-3 { bottom: 16%; right: 3%; }
 .seat-4 { bottom: 4%; left: 50%; transform: translateX(-50%); }
-.seat-5 { bottom: 23%; left: 3%; }
+.seat-5 { bottom: 16%; left: 3%; }
 .seat-6 { top: 23%; left: 3%; }
