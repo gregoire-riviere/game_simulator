@@ -7,6 +7,7 @@
 * Lorsque tu introduits des nouvelles fonctionnalités importantes, tâche de découpler
 * Quand tu introduits des calcul/lignes compliquées, ajoute un petit commentaire avant
 * Pas de mix format sur fichier deja existant, sauf demande explicite!
+* Ne laisse pas persister de serveur qui tourne a la fin d'un run/d'une réponse, je testerai de mon côté
 
 ## Architecture à respecter
 * Les mécaniques de jeu ne sont jamais confiés aux llm. Elles sont toujours implémenter de façon deterministe dans l'outil, les llm, quand ils sont là, ne sont utilisés que pour la décision

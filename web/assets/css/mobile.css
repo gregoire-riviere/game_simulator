@@ -21,9 +21,20 @@
 .card-heading .primary-button { width: 100%; margin-top: 1.25rem; }
 .game-form { grid-template-columns: 1fr; }
 .game-form .primary-button, .game-form .form-status { grid-column: span 1; }
-.table-toolbar { align-items: flex-start; flex-direction: column; }
-.llm-controls { justify-content: flex-start; }
+.table-toolbar { grid-template-columns: 1fr; align-items: stretch; gap: .65rem; margin-inline: -.25rem; padding: .65rem; }
+.table-toolbar .form-status { width: 100%; min-height: 2.75rem; }
+.table-toolbar-actions { display: grid; grid-template-columns: 1fr 1fr; gap: .55rem; width: 100%; }
+.llm-controls { display: grid; grid-column: 1 / -1; grid-template-columns: 1fr; align-items: stretch; justify-content: stretch; gap: .45rem; padding: .55rem; }
+.extract-count-label { font-size: .76rem; }
+.extract-control { display: grid; grid-template-columns: 4.2rem minmax(0, 1fr); }
+.extract-control .leave-table-button { border-left: 1px solid #ffffff1f; }
+.table-toolbar-actions > .leave-table-button, .llm-mode-select { width: 100%; min-height: 2.9rem; }
+.llm-credit { min-height: auto; }
 .poker-table { min-height: 32rem; border-width: .45rem; border-radius: 2rem; }
+.action-panel { display: grid; grid-template-columns: 1fr 1fr; gap: .55rem; margin-inline: -.25rem; padding: .65rem; }
+.bet-control { grid-column: 1 / -1; grid-template-columns: 4.8rem minmax(0, 1fr); padding: .4rem; }
+.table-action { width: 100%; max-width: none; min-height: 3.1rem; padding: .7rem .65rem; font-size: .95rem; }
+.action-icon { flex-basis: 1.5rem; width: 1.5rem; height: 1.5rem; }
 .seat { min-width: 5.4rem; padding: .4rem; font-size: .65rem; }
 .seat-2, .seat-3 { right: 5%; }
 .seat-5, .seat-6 { left: 5%; }

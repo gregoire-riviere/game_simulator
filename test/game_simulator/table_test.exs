@@ -36,6 +36,15 @@ defmodule GameSimulator.TableTest do
     assert {:error, :forbidden} = GameSimulator.Table.advance_bot(table, "mallory")
   end
 
+  test "exposes HUD stats for every player" do
+    {:ok, table} = GameSimulator.Table.start_link(owner: "alice")
+    assert {:ok, state} = GameSimulator.Table.state(table, "alice")
+
+    assert Enum.all?(state.players, fn player ->
+             player.hud == %{hands: 1, vpip: 0, pfr: 0, aggressive: 0, calls: 0, folds: 0}
+           end)
+  end
+
   test "keeps the full hand action timeline separate from recent actions" do
     state = %{owner: "alice", human_id: {:human, "alice"}, profiles: %{}, actions: [], hand_actions: []}
 

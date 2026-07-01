@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Game Simulator</title>
-    <link rel="icon" type="image/png" href="/img/favicon.png" />
+    <link rel="icon" type="image/png" href="/img/test.png" />
     <link rel="stylesheet" href="/css/app.css" />
     <link rel="stylesheet" href="/css/mobile.css" media="(max-width: 700px)" />
   </head>
@@ -84,10 +84,12 @@
             <div class="table-toolbar">
               <p id="table-status" class="form-status" role="status" aria-live="polite"></p>
               <div class="table-toolbar-actions">
-                <span id="llm-controls" class="llm-controls">
-                  <label class="extract-count-label" for="extract-count">Mains</label>
-                  <input id="extract-count" class="extract-count" type="number" min="1" max="50" value="10" />
-                  <button id="extract-button" class="leave-table-button" type="button">Extract LLM</button>
+                <span id="llm-controls" class="llm-controls" aria-label="Outils LLM">
+                  <label class="extract-count-label" for="extract-count">Mains à exporter</label>
+                  <span class="extract-control">
+                    <input id="extract-count" class="extract-count" type="number" min="1" max="50" value="10" aria-label="Nombre de mains à exporter" />
+                    <button id="extract-button" class="leave-table-button" type="button">Exporter LLM</button>
+                  </span>
                   <span id="llm-credit" class="llm-credit" title="Crédit OpenRouter restant"></span>
                   <select id="llm-mode-select" class="llm-mode-select" aria-label="Mode LLM">
                     <option value="llm">LLM</option>
@@ -177,13 +179,13 @@
           <header class="poker-header">
             <div class="page-heading">
               <p class="eyebrow">Compte</p>
-              <h1 id="account-title">Mot de passe</h1>
+              <h1 id="account-title">Changer le mot de passe</h1>
               <p class="intro">Modifier le mot de passe de votre session.</p>
             </div>
           </header>
 
           <section class="admin-card" aria-labelledby="password-title">
-            <h2 id="password-title">Changer le mot de passe</h2>
+            <h2 id="password-title">Changer le MDP</h2>
             <form id="password-form" class="admin-form">
               <label for="current-password">Mot de passe actuel</label>
               <input id="current-password" name="current_password" type="password" autocomplete="current-password" required />

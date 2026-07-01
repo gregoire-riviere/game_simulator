@@ -18,4 +18,10 @@ defmodule Poker.ProfileTest do
       assert profile.memory.current_tilt == 0.0
     end)
   end
+
+  test "generates distinct names for a standard table" do
+    names = Poker.Profile.generate(5) |> Enum.map(& &1.name)
+
+    assert length(Enum.uniq(names)) == 5
+  end
 end

@@ -202,7 +202,7 @@ function renderPlayers(players) {
   players.forEach((player) => {
     const seat = document.createElement("article");
     seat.className = `seat seat-${player.seat}${player.active ? " active" : ""}${player.folded ? " folded" : ""}`;
-    seat.innerHTML = `<div class="seat-heading"><strong></strong><span class="position-badge"></span></div><span class="seat-stack"></span><span class="seat-status"></span><div class="hole-cards"></div>`;
+    seat.innerHTML = `<div class="seat-heading"><strong></strong><span class="position-badge"></span></div><span class="seat-stack"></span><span class="seat-status"></span><div class="hole-cards"></div><div class="seat-hud"></div>`;
     seat.querySelector("strong").textContent = player.name;
     seat.querySelector(".position-badge").textContent = player.dealer_button ? "BTN" : player.position;
     seat.querySelector(".position-badge").title = player.dealer_button ? "Bouton" : "Position";
@@ -216,7 +216,27 @@ function renderPlayers(players) {
       player.cards.forEach((value) => cards.append(card(value)));
     }
 
+    renderHud(seat.querySelector(".seat-hud"), player.hud);
     pokerTable.append(seat);
+  });
+}
+
+function renderHud(container, hud) {
+  if (!hud) return;
+
+  [
+    ["H", hud.hands],
+    ["VP", `${hud.vpip}%`],
+    ["PF", `${hud.pfr}%`],
+    ["A", hud.aggressive],
+    ["C", hud.calls],
+    ["F", hud.folds]
+  ].forEach(([label, value]) => {
+    const item = document.createElement("span");
+    item.innerHTML = `<small></small><strong></strong>`;
+    item.querySelector("small").textContent = label;
+    item.querySelector("strong").textContent = value;
+    container.append(item);
   });
 }
 
@@ -280,6 +300,8 @@ function renderActions() {
     input.max = limits.max;
     input.value = limits.min;
     input.className = "bet-input";
+    input.inputMode = "decimal";
+    input.setAttribute("aria-label", "Montant");
     const button = actionButton(actionMeta({ action: type }), null);
     button.onclick = () => submitAction({ action: type, amount: Number(input.value) });
     control.append(input, button);

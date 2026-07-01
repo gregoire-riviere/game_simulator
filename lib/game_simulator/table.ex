@@ -44,10 +44,11 @@ defmodule GameSimulator.Table do
     end)
 
     Poker.Game.join(game, human_id, 200, 6)
-    {:ok, _state} = Poker.Game.start_hand(game)
+    {:ok, snapshot} = Poker.Game.start_hand(game)
 
     profiles = Map.new(Enum.with_index(profiles, 1), fn {profile, seat} -> {{:bot, seat}, profile} end)
-    {:ok, %{owner: owner, game: game, human_id: human_id, profiles: profiles, actions: [], hand_actions: [], llm_mode: :shadow, mode: mode}}
+    hud_stats = snapshot |> empty_hud_stats() |> count_hud_hand(snapshot)
+    {:ok, %{owner: owner, game: game, human_id: human_id, profiles: profiles, actions: [], hand_actions: [], hud_stats: hud_stats, hud_hand: %{}, llm_mode: :shadow, mode: mode}}
   end
 
   @impl true
@@ -92,7 +93,7 @@ defmodule GameSimulator.Table do
     with :ok <- owner?(state, owner),
          :ok <- hero_has_chips(state),
          {:ok, snapshot} <- Poker.Game.start_hand(state.game) do
-      state = %{state | actions: [], hand_actions: []} |> record_top_ups(snapshot)
+      state = %{state | actions: [], hand_actions: [], hud_hand: %{}} |> count_hud_hand(snapshot) |> record_top_ups(snapshot)
       reply(state, owner)
     else
       {:error, reason} -> {:reply, {:error, reason}, state}
@@ -174,9 +175,77 @@ defmodule GameSimulator.Table do
   def record_action(state, id, action, llm_shadow, local_action), do: record_action(state, id, action, llm_shadow, local_action, false)
 
   def record_action(state, id, action, llm_shadow, local_action, llm_applied) do
-    action = action_entry(state, id, action, llm_shadow, local_action, llm_applied)
-    %{state | actions: Enum.take([action | state.actions], 8), hand_actions: [action | state.hand_actions]}
+    entry = action_entry(state, id, action, llm_shadow, local_action, llm_applied)
+    state = update_hud_action(state, id, action)
+    %{state | actions: Enum.take([entry | state.actions], 8), hand_actions: [entry | state.hand_actions]}
   end
+
+  def empty_hud_stats(snapshot), do: Map.new(Map.keys(snapshot.players), &{&1, empty_hud_stat()})
+
+  def empty_hud_stat, do: %{hands: 0, vpip: 0, pfr: 0, aggressive: 0, calls: 0, folds: 0}
+
+  def count_hud_hand(state_or_stats, snapshot) do
+    stats = Map.get(state_or_stats, :hud_stats, state_or_stats)
+
+    stats =
+      Enum.reduce(Map.keys(snapshot.players), stats, fn id, stats ->
+        stats
+        |> Map.put_new(id, empty_hud_stat())
+        |> update_in([id, :hands], &(&1 + 1))
+      end)
+
+    if is_map_key(state_or_stats, :hud_stats), do: %{state_or_stats | hud_stats: stats}, else: stats
+  end
+
+  def update_hud_action(state, id, action) do
+    if Map.has_key?(state, :game) and Map.has_key?(state, :hud_stats) and Map.has_key?(state, :hud_hand) do
+      game_state = Poker.Game.internal_state(state.game)
+      key = hud_action_key(action)
+      stats = Map.put_new(state.hud_stats, id, empty_hud_stat())
+      hand = Map.put_new(state.hud_hand, id, %{vpip: false, pfr: false})
+
+      {stats, hand} = update_hud_vpip(stats, hand, id, key, game_state.phase)
+      stats = update_hud_counter(stats, id, key)
+      %{state | hud_stats: stats, hud_hand: hand}
+    else
+      state
+    end
+  end
+
+  def hud_action_key({:bet, _amount}), do: :aggressive
+  def hud_action_key({:raise_to, _amount}), do: :aggressive
+  def hud_action_key(:all_in), do: :aggressive
+  def hud_action_key(:call), do: :calls
+  def hud_action_key(:fold), do: :folds
+  def hud_action_key(_action), do: :other
+
+  def update_hud_vpip(stats, hand, id, key, :preflop) when key in [:aggressive, :calls] do
+    player_hand = Map.fetch!(hand, id)
+
+    stats =
+      if player_hand.vpip do
+        stats
+      else
+        update_in(stats[id][:vpip], &(&1 + 1))
+      end
+
+    stats =
+      if key == :aggressive and not player_hand.pfr do
+        update_in(stats[id][:pfr], &(&1 + 1))
+      else
+        stats
+      end
+
+    hand = hand |> put_in([id, :vpip], true) |> put_in([id, :pfr], key == :aggressive or player_hand.pfr)
+    {stats, hand}
+  end
+
+  def update_hud_vpip(stats, hand, _id, _key, _phase), do: {stats, hand}
+
+  def update_hud_counter(stats, id, :aggressive), do: update_in(stats[id][:aggressive], &(&1 + 1))
+  def update_hud_counter(stats, id, :calls), do: update_in(stats[id][:calls], &(&1 + 1))
+  def update_hud_counter(stats, id, :folds), do: update_in(stats[id][:folds], &(&1 + 1))
+  def update_hud_counter(stats, _id, _key), do: stats
 
   def action_entry(state, id, action, nil, _local_action, _llm_applied), do: %{player: player_name(state, id), action: action_name(action)}
 
@@ -307,7 +376,8 @@ defmodule GameSimulator.Table do
           contribution: player.contribution,
           position: position_label(player.position),
           dealer_button: id == snapshot.dealer,
-          active: id == snapshot.active_player
+          active: id == snapshot.active_player,
+          hud: hud_public(Map.get(state.hud_stats, id, empty_hud_stat()))
         }
       end)
       |> Enum.sort_by(& &1.seat)
@@ -335,6 +405,9 @@ defmodule GameSimulator.Table do
   end
 
   def public_id(state, id), do: if(id == state.human_id, do: "hero", else: "bot-#{elem(id, 1)}")
+  def hud_public(stats), do: %{hands: stats.hands, vpip: pct(stats.vpip, stats.hands), pfr: pct(stats.pfr, stats.hands), aggressive: stats.aggressive, calls: stats.calls, folds: stats.folds}
+  def pct(_value, 0), do: 0
+  def pct(value, total), do: round(value * 100 / total)
   def player_name(state, id), do: if(id == state.human_id, do: state.owner, else: Map.fetch!(state.profiles, id).name)
   def position_label(:button), do: "BTN"
   def position_label(:small_blind), do: "SB"

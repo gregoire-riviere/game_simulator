@@ -16,16 +16,32 @@ defmodule Poker.Profile do
     %{name: :spewy_aggro, weight: 3, vpip: 42..65, pfr: 25..48, three_bet: 10..22, fold_to_cbet: 15..35, showdown_curiosity: 40..80, aggression: 70..95, bluff: 20..40, resistance: 10..55, call_too_wide: true, overplays_top_pair: true, chases_draws: true, weird: 15..30, mistakes: 5..12, description: "Relance trop et overplay ses mains."}
   ]
 
+  @bot_names [
+    "Aaron", "Adam", "Adel", "Adrien", "Agathe", "Aïcha", "Alain", "Alex", "Alice", "Aline",
+    "Amel", "Anaïs", "Anissa", "Antoine", "Arthur", "Aya", "Baptiste", "Bilal", "Bruno", "Camille",
+    "Carla", "Céline", "Chloé", "Clara", "Clément", "Damien", "David", "Diane", "Dylan", "Élodie",
+    "Emma", "Enzo", "Eva", "Farah", "Florian", "Gabriel", "Gaël", "Hana", "Hugo", "Inès",
+    "Iris", "Jade", "Jérémy", "Julie", "Karim", "Laura", "Léa", "Lila", "Lina", "Lise",
+    "Loïc", "Lola", "Lucas", "Maël", "Manon", "Marc", "Mathis", "Mehdi", "Mélissa", "Mia",
+    "Michel", "Mila", "Naël", "Nadia", "Nathan", "Nina", "Noah", "Noémie", "Nora", "Océane",
+    "Olivier", "Paul", "Quentin", "Raphaël", "Rayan", "Rémi", "Romane", "Samir", "Sarah", "Sasha",
+    "Sofia", "Sonia", "Sophie", "Tania", "Théo", "Thierry", "Tom", "Valentin", "Victor", "Yanis",
+    "Yasmine", "Zoé"
+  ]
+
   def generate(count) when is_integer(count) and count > 0 do
-    Enum.map(1..count, &new/1)
+    names = random_names(count)
+    Enum.map(1..count, fn index -> new(index, Enum.at(names, index - 1)) end)
   end
 
-  def new(index) do
+  def new(index), do: new(index, bot_name(index))
+
+  def new(_index, name) do
     archetype = weighted_archetype(@archetypes)
     vpip = random(archetype.vpip)
 
     %{
-      name: bot_name(index),
+      name: name,
       archetype: archetype.name,
       vpip: vpip,
       pfr: min(random(archetype.pfr), vpip),
@@ -57,5 +73,7 @@ defmodule Poker.Profile do
 
   def random(first..last//_step), do: first + :rand.uniform(last - first + 1) - 1
 
-  def bot_name(index), do: Enum.at(["Michel", "Nadia", "Karim", "Sophie", "Lucas", "Emma", "Thierry", "Lina"], rem(index - 1, 8))
+  def random_names(count), do: @bot_names |> Enum.shuffle() |> Stream.cycle() |> Enum.take(count)
+
+  def bot_name(index), do: Enum.at(@bot_names, rem(index - 1, length(@bot_names)))
 end
