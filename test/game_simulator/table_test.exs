@@ -45,6 +45,17 @@ defmodule GameSimulator.TableTest do
            end)
   end
 
+  test "builds a coaching context from public hero information" do
+    {:ok, table} = GameSimulator.Table.start_link(owner: "alice")
+
+    assert {:ok, context} = GameSimulator.Table.coaching_context(table, "alice")
+    assert context.format == "NL2 6-max"
+    assert length(context.hero.cards) == 2
+    assert is_integer(context.pot)
+    assert Enum.all?(context.players, &(not Map.has_key?(&1, :cards)))
+    assert {:error, :forbidden} = GameSimulator.Table.coaching_context(table, "mallory")
+  end
+
   test "keeps the full hand action timeline separate from recent actions" do
     state = %{owner: "alice", human_id: {:human, "alice"}, profiles: %{}, actions: [], hand_actions: []}
 
@@ -60,7 +71,7 @@ defmodule GameSimulator.TableTest do
   test "can choose the LLM mode for the current table" do
     {:ok, table} = GameSimulator.Table.start_link(owner: "alice")
 
-    assert {:ok, %{llm_mode: :shadow}} = GameSimulator.Table.state(table, "alice")
+    assert {:ok, %{llm_mode: :llm}} = GameSimulator.Table.state(table, "alice")
     assert {:ok, %{llm_mode: :off}} = GameSimulator.Table.set_llm_mode(table, "alice", :off)
     assert {:ok, %{llm_mode: :llm}} = GameSimulator.Table.set_llm_mode(table, "alice", :llm)
     assert {:error, :invalid_llm_mode} = GameSimulator.Table.set_llm_mode(table, "alice", "false")

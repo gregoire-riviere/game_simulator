@@ -9,6 +9,7 @@ defmodule GameSimulator.Table do
   use GenServer
 
   @default_game_key "poker:cash_nl2"
+  @call_timeout 15_000
 
   def child_spec(options) do
     %{
@@ -24,12 +25,13 @@ defmodule GameSimulator.Table do
     GenServer.start_link(__MODULE__, options, if(name, do: [name: name], else: []))
   end
 
-  def state(table, owner), do: GenServer.call(table, {:state, owner})
-  def act(table, owner, action), do: GenServer.call(table, {:act, owner, action})
-  def advance_bot(table, owner), do: GenServer.call(table, {:advance_bot, owner})
-  def next_hand(table, owner), do: GenServer.call(table, {:next_hand, owner})
-  def extract(table, owner, count), do: GenServer.call(table, {:extract, owner, count})
-  def set_llm_mode(table, owner, mode), do: GenServer.call(table, {:set_llm_mode, owner, mode})
+  def state(table, owner), do: GenServer.call(table, {:state, owner}, @call_timeout)
+  def act(table, owner, action), do: GenServer.call(table, {:act, owner, action}, @call_timeout)
+  def advance_bot(table, owner), do: GenServer.call(table, {:advance_bot, owner}, @call_timeout)
+  def next_hand(table, owner), do: GenServer.call(table, {:next_hand, owner}, @call_timeout)
+  def extract(table, owner, count), do: GenServer.call(table, {:extract, owner, count}, @call_timeout)
+  def coaching_context(table, owner), do: GenServer.call(table, {:coaching_context, owner}, @call_timeout)
+  def set_llm_mode(table, owner, mode), do: GenServer.call(table, {:set_llm_mode, owner, mode}, @call_timeout)
 
   @impl true
   def init(options) do
@@ -57,7 +59,7 @@ defmodule GameSimulator.Table do
        hand_actions: Map.get(snapshot, :hand_actions, []),
        hud_stats: Map.get(snapshot, :hud_stats, %{}),
        hud_hand: Map.get(snapshot, :hud_hand, %{}),
-       llm_mode: Map.get(snapshot, :llm_mode, :shadow),
+       llm_mode: Map.get(snapshot, :llm_mode, :llm),
        mode: Map.get(snapshot, :mode, :cash_nl2),
        game_key: game_key,
        autosave: autosave,
@@ -83,7 +85,7 @@ defmodule GameSimulator.Table do
 
     profiles = Map.new(Enum.with_index(profiles, 1), fn {profile, seat} -> {{:bot, seat}, profile} end)
     hud_stats = snapshot |> empty_hud_stats() |> count_hud_hand(snapshot)
-    state = %{owner: owner, game: game, human_id: human_id, profiles: profiles, actions: [], hand_actions: [], hud_stats: hud_stats, hud_hand: %{}, llm_mode: :shadow, mode: mode, game_key: game_key, autosave: autosave, saving?: false}
+    state = %{owner: owner, game: game, human_id: human_id, profiles: profiles, actions: [], hand_actions: [], hud_stats: hud_stats, hud_hand: %{}, llm_mode: :llm, mode: mode, game_key: game_key, autosave: autosave, saving?: false}
     {:ok, maybe_save_async(state)}
   end
 
@@ -144,6 +146,14 @@ defmodule GameSimulator.Table do
          {:ok, count} <- valid_extract_count(count),
          {:ok, hands} <- Poker.Game.history(state.game, count) do
       {:reply, {:ok, %{count: length(hands), format: "markdown", text: extract_text(state, hands)}}, state}
+    else
+      {:error, reason} -> {:reply, {:error, reason}, state}
+    end
+  end
+
+  def handle_call({:coaching_context, owner}, _from, state) do
+    with :ok <- owner?(state, owner) do
+      {:reply, {:ok, build_coaching_context(state, owner)}, state}
     else
       {:error, reason} -> {:reply, {:error, reason}, state}
     end
@@ -232,6 +242,49 @@ defmodule GameSimulator.Table do
   def hero_in_hand?(game_state, human_id) do
     MapSet.member?(game_state.hand_players, human_id) and not MapSet.member?(game_state.folded, human_id)
   end
+
+  def build_coaching_context(state, owner) do
+    public = public_state(state, owner)
+    hero = Enum.find(public.players, &(&1.id == "hero"))
+
+    %{
+      format: "NL2 6-max",
+      phase: public.phase,
+      hand_number: public.hand_number,
+      hero_turn: public.hero_turn,
+      hand_finished: public.hand_finished,
+      blinds: %{small: public.small_blind, big: public.big_blind},
+      pot: public.pot,
+      board: public.board,
+      hero: %{
+        cards: hero.cards,
+        stack: hero.stack,
+        contribution: hero.contribution,
+        position: hero.position,
+        folded: hero.folded
+      },
+      players: Enum.map(public.players, &coaching_player/1),
+      legal_actions: Enum.map(public.actions, &coaching_action/1),
+      hand_actions: Enum.take(public.hand_actions, -8)
+    }
+  end
+
+  def coaching_player(player) do
+    %{
+      id: player.id,
+      name: player.name,
+      stack: player.stack,
+      contribution: player.contribution,
+      position: player.position,
+      folded: player.folded,
+      active: player.active,
+      hud: player.hud
+    }
+  end
+
+  def coaching_action(action) when is_atom(action), do: %{action: Atom.to_string(action)}
+  def coaching_action(%{bet: limits}), do: %{action: "bet", min: limits.min, max: limits.max}
+  def coaching_action(%{raise_to: limits}), do: %{action: "raise_to", min: limits.min, max: limits.max}
 
   def previous_aggressive_action?(%{current_hand_actions: actions}) do
     case List.last(actions) do

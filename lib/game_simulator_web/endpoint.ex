@@ -134,6 +134,21 @@ defmodule GameSimulatorWeb.Endpoint do
     end)
   end
 
+  post "/api/llm/coaching" do
+    authenticated(conn, "llm", fn conn, account ->
+      with {:ok, table} <- table_for(account.username),
+           {:ok, context} <- GameSimulator.Table.coaching_context(table, account.username) do
+        case Poker.Coaching.call(GameSimulator.Configuration.llm!(), context) do
+          {:ok, advice} -> send_json(conn, 200, advice)
+          {:error, :llm_disabled} -> send_json(conn, 422, %{error: "llm_disabled"})
+          {:error, _reason} -> send_json(conn, 502, %{error: "coaching_unavailable"})
+        end
+      else
+        {:error, reason} -> table_error(conn, reason)
+      end
+    end)
+  end
+
   get "/api/table/save" do
     authenticated(conn, "poker", fn conn, account ->
       case GameSimulator.Tables.save_status(account.username) do

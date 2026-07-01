@@ -43,6 +43,10 @@ const extractButton = document.getElementById("extract-button");
 const extractPanel = document.getElementById("extract-panel");
 const extractOutput = document.getElementById("extract-output");
 const copyExtractButton = document.getElementById("copy-extract-button");
+const coachingButton = document.getElementById("coaching-button");
+const coachingDialog = document.getElementById("coaching-dialog");
+const coachingAdvice = document.getElementById("coaching-advice");
+const coachingWhy = document.getElementById("coaching-why");
 const handResult = document.getElementById("hand-result");
 const handResultReason = document.getElementById("hand-result-reason");
 const handResultWinners = document.getElementById("hand-result-winners");
@@ -426,7 +430,7 @@ function renderLlmMode() {
 
   const available = Boolean(table.llm_available);
   llmModeSelect.disabled = !available;
-  llmModeSelect.value = available ? (table.llm_mode || "shadow") : "off";
+  llmModeSelect.value = available ? (table.llm_mode || "llm") : "off";
   llmCredit.hidden = !available;
   if (available) refreshLlmCredit();
 }
@@ -576,6 +580,22 @@ async function copyExtract() {
     extractOutput.select();
     document.execCommand("copy");
     tableStatus.textContent = "Extract copié.";
+  }
+}
+
+async function requestCoaching() {
+  if (!hasPermission("llm")) return;
+  coachingButton.disabled = true;
+
+  try {
+    const advice = await api("/api/llm/coaching", { method: "POST", body: "{}" });
+    coachingAdvice.textContent = advice.advice;
+    coachingWhy.textContent = advice.why;
+    coachingDialog.showModal();
+  } catch (_error) {
+    tableStatus.textContent = "Impossible de générer un conseil.";
+  } finally {
+    coachingButton.disabled = false;
   }
 }
 
@@ -808,6 +828,7 @@ resetTableButton.addEventListener("click", resetTable);
 llmModeSelect.addEventListener("change", setLlmMode);
 extractButton.addEventListener("click", extractHands);
 copyExtractButton.addEventListener("click", copyExtract);
+coachingButton.addEventListener("click", requestCoaching);
 logoutButton.addEventListener("click", logout);
 
 restoreSession();

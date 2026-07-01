@@ -278,6 +278,19 @@ defmodule GameSimulatorWeb.EndpointTest do
     assert response.status == 403
   end
 
+  test "requires llm permission for coaching" do
+    user = "coaching-#{System.unique_integer([:positive])}"
+    assert :ok = Users.add(user, "a-long-test-password", ["poker"])
+    {:ok, token, _expiration} = Auth.issue_token(user)
+
+    response =
+      conn(:post, "/api/llm/coaching", %{})
+      |> put_req_header("authorization", "Bearer #{token}")
+      |> then(&Endpoint.call(&1, Endpoint.init([])))
+
+    assert response.status == 403
+  end
+
   test "requires llm permission for LLM endpoints" do
     user = "table-export-#{System.unique_integer([:positive])}"
     assert :ok = Users.add(user, "a-long-test-password", ["poker"])

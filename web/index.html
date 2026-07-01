@@ -95,6 +95,7 @@
                     <input id="extract-count" class="extract-count" type="number" min="1" max="50" value="10" aria-label="Nombre de mains à exporter" />
                     <button id="extract-button" class="leave-table-button" type="button">Exporter LLM</button>
                   </span>
+                  <button id="coaching-button" class="leave-table-button" type="button">Coaching</button>
                   <span id="llm-credit" class="llm-credit" title="Crédit OpenRouter restant"></span>
                   <select id="llm-mode-select" class="llm-mode-select" aria-label="Mode LLM">
                     <option value="llm">LLM</option>
@@ -116,6 +117,19 @@
               </div>
               <textarea id="extract-output" readonly spellcheck="false"></textarea>
             </section>
+            <dialog id="coaching-dialog" class="coaching-dialog" aria-labelledby="coaching-title">
+              <form method="dialog">
+                <div class="extract-header">
+                  <div>
+                    <p class="eyebrow">Coaching</p>
+                    <h2 id="coaching-title">Conseil NL2</h2>
+                  </div>
+                  <button class="leave-table-button" type="submit">Fermer</button>
+                </div>
+                <strong id="coaching-advice"></strong>
+                <p id="coaching-why"></p>
+              </form>
+            </dialog>
             <div id="poker-table" class="poker-table">
               <div class="pot"><span id="hand-number" class="hand-number">Main 1</span><span>Pot</span><strong id="pot">0,00 €</strong></div>
               <div id="board" class="board" aria-label="Cartes communes"></div>
