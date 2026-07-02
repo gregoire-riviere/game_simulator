@@ -43,6 +43,7 @@ const extractButton = document.getElementById("extract-button");
 const extractPanel = document.getElementById("extract-panel");
 const extractOutput = document.getElementById("extract-output");
 const copyExtractButton = document.getElementById("copy-extract-button");
+const closeExtractButton = document.getElementById("close-extract-button");
 const coachingButton = document.getElementById("coaching-button");
 const coachingDialog = document.getElementById("coaching-dialog");
 const coachingAdvice = document.getElementById("coaching-advice");
@@ -583,6 +584,10 @@ async function copyExtract() {
   }
 }
 
+function closeExtract() {
+  extractPanel.hidden = true;
+}
+
 async function requestCoaching() {
   if (!hasPermission("llm")) return;
   coachingButton.disabled = true;
@@ -828,6 +833,7 @@ resetTableButton.addEventListener("click", resetTable);
 llmModeSelect.addEventListener("change", setLlmMode);
 extractButton.addEventListener("click", extractHands);
 copyExtractButton.addEventListener("click", copyExtract);
+closeExtractButton.addEventListener("click", closeExtract);
 coachingButton.addEventListener("click", requestCoaching);
 logoutButton.addEventListener("click", logout);
 
