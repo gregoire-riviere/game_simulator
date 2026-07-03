@@ -151,9 +151,15 @@ defmodule GameSimulatorWeb.Endpoint do
 
   get "/api/table/save" do
     authenticated(conn, "poker", fn conn, account ->
-      case GameSimulator.Tables.save_status(account.username) do
-        {:ok, has_save} -> send_json(conn, 200, %{has_save: has_save})
-        {:error, _reason} -> send_json(conn, 500, %{error: "save_status_unavailable"})
+      conn = Plug.Conn.fetch_query_params(conn)
+
+      with {:ok, game_key} <- parse_game_key(conn.query_params["game_key"]) do
+        case GameSimulator.Tables.save_status(account.username, game_key) do
+          {:ok, has_save} -> send_json(conn, 200, %{has_save: has_save})
+          {:error, _reason} -> send_json(conn, 500, %{error: "save_status_unavailable"})
+        end
+      else
+        {:error, reason} -> table_error(conn, reason)
       end
     end)
   end
@@ -161,7 +167,8 @@ defmodule GameSimulatorWeb.Endpoint do
   post "/api/table" do
     # Nouvelle partie : la sauvegarde unique sera écrasée par le premier snapshot.
     authenticated(conn, "poker", fn conn, account ->
-      with {:ok, table} <- GameSimulator.Tables.start_new(account.username),
+      with {:ok, game_key} <- parse_game_key(conn.body_params["game_key"]),
+           {:ok, table} <- GameSimulator.Tables.start_new(account.username, game_key),
            {:ok, state} <- GameSimulator.Table.state(table, account.username) do
         send_table_json(conn, 201, state, account)
       else
@@ -172,7 +179,8 @@ defmodule GameSimulatorWeb.Endpoint do
 
   post "/api/table/resume" do
     authenticated(conn, "poker", fn conn, account ->
-      with {:ok, table} <- GameSimulator.Tables.resume(account.username),
+      with {:ok, game_key} <- parse_game_key(conn.body_params["game_key"]),
+           {:ok, table} <- GameSimulator.Tables.resume(account.username, game_key),
            {:ok, state} <- GameSimulator.Table.state(table, account.username) do
         send_table_json(conn, 200, state, account)
       else
@@ -366,6 +374,12 @@ defmodule GameSimulatorWeb.Endpoint do
   end
 
   def parse_count(_value), do: {:error, :invalid_extract_count}
+
+  def parse_game_key(nil), do: {:ok, "poker:cash_nl2"}
+  def parse_game_key(game_key) when is_binary(game_key) do
+    if GameSimulator.Table.valid_game_key?(game_key), do: {:ok, game_key}, else: {:error, :invalid_game_key}
+  end
+  def parse_game_key(_game_key), do: {:error, :invalid_game_key}
 
   def parse_llm_mode("llm"), do: {:ok, :llm}
   def parse_llm_mode("shadow"), do: {:ok, :shadow}

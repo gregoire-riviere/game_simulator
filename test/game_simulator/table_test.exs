@@ -14,6 +14,16 @@ defmodule GameSimulator.TableTest do
     assert {:error, :forbidden} = GameSimulator.Table.state(table, "mallory")
   end
 
+  test "starts an NL2 table with five players" do
+    {:ok, table} = GameSimulator.Table.start_link(owner: "alice", game_key: "poker:cash_nl2_5")
+    assert {:ok, state} = GameSimulator.Table.state(table, "alice")
+
+    assert length(state.players) == 5
+    assert state.game_key == "poker:cash_nl2_5"
+    assert state.format == "NL2 5 joueurs"
+    assert Enum.find(state.players, &(&1.id == "hero")).seat == 5
+  end
+
   test "resets hand number on a new table" do
     {:ok, first_table} = GameSimulator.Table.start_link(owner: "alice")
     first_state = :sys.get_state(first_table)

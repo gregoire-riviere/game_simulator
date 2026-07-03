@@ -1,6 +1,6 @@
 defmodule GameSimulator.Table do
   @moduledoc """
-  Session temporaire d'un utilisateur : une table, son héros et cinq PNJ.
+  Session temporaire d'un utilisateur : une table, son héros et ses PNJ.
 
   Cette couche coordonne le moteur, les profils et l'API. Elle ne réimplémente
   jamais les règles de poker, qui restent dans `Poker.Game`.
@@ -9,6 +9,10 @@ defmodule GameSimulator.Table do
   use GenServer
 
   @default_game_key "poker:cash_nl2"
+  @game_configs %{
+    "poker:cash_nl2" => %{label: "NL2 6-max", mode: :cash_nl2, seats: 6},
+    "poker:cash_nl2_5" => %{label: "NL2 5 joueurs", mode: :cash_nl2, seats: 5}
+  }
   @call_timeout 15_000
 
   def child_spec(options) do
@@ -35,7 +39,6 @@ defmodule GameSimulator.Table do
 
   @impl true
   def init(options) do
-    # La table V1 est toujours 6-max : le héros reçoit le siège 6, les PNJ les autres.
     owner = Keyword.fetch!(options, :owner)
     game_key = Keyword.get(options, :game_key, @default_game_key)
     autosave = Keyword.get(options, :autosave, false)
@@ -70,17 +73,18 @@ defmodule GameSimulator.Table do
   def init_from_snapshot(_owner, _game_key, _autosave, _snapshot), do: {:stop, :invalid_save}
 
   def init_new_table(options, owner, game_key, autosave) do
-    mode = Keyword.get(options, :mode, :cash_nl2)
+    config = game_config!(game_key)
+    mode = Keyword.get(options, :mode, config.mode)
     provider = Keyword.get(options, :profile_provider, Poker.LocalProfileProvider)
     {:ok, game} = Poker.Game.start_link(small_blind: 1, big_blind: 2, mode: mode, min_stack: 80, top_up_to: 200)
-    profiles = provider.generate(5)
+    profiles = provider.generate(config.seats - 1)
     human_id = {:human, owner}
 
-    Enum.each(1..5, fn seat ->
+    Enum.each(1..(config.seats - 1), fn seat ->
       Poker.Game.join(game, {:bot, seat}, 200, seat)
     end)
 
-    Poker.Game.join(game, human_id, 200, 6)
+    Poker.Game.join(game, human_id, 200, config.seats)
     {:ok, snapshot} = Poker.Game.start_hand(game)
 
     profiles = Map.new(Enum.with_index(profiles, 1), fn {profile, seat} -> {{:bot, seat}, profile} end)
@@ -248,7 +252,7 @@ defmodule GameSimulator.Table do
     hero = Enum.find(public.players, &(&1.id == "hero"))
 
     %{
-      format: "NL2 6-max",
+      format: game_label(state),
       phase: public.phase,
       hand_number: public.hand_number,
       hero_turn: public.hero_turn,
@@ -513,6 +517,8 @@ defmodule GameSimulator.Table do
     %{
       owner: owner,
       mode: state.mode,
+      game_key: state.game_key,
+      format: game_label(state),
       phase: snapshot.phase,
       hand_number: snapshot.hand_number,
       dealer: public_id(state, snapshot.dealer),
@@ -533,6 +539,10 @@ defmodule GameSimulator.Table do
   end
 
   def public_id(state, id), do: if(id == state.human_id, do: "hero", else: "bot-#{elem(id, 1)}")
+
+  def game_config!(game_key), do: Map.fetch!(@game_configs, game_key)
+  def valid_game_key?(game_key), do: is_map_key(@game_configs, game_key)
+  def game_label(%{game_key: game_key}), do: game_config!(game_key).label
   def hud_public(stats), do: %{hands: stats.hands, vpip: pct(stats.vpip, stats.hands), pfr: pct(stats.pfr, stats.hands), aggressive: stats.aggressive, calls: stats.calls, folds: stats.folds}
   def pct(_value, 0), do: 0
   def pct(value, total), do: round(value * 100 / total)

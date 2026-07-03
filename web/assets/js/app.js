@@ -24,6 +24,7 @@ const adminStatus = document.getElementById("admin-status");
 const usersTableBody = document.getElementById("users-table-body");
 const newTableButton = document.getElementById("new-table-button");
 const resumeTableButton = document.getElementById("resume-table-button");
+const gameTypeSelect = document.getElementById("game-type-select");
 const tableLobby = document.getElementById("table-lobby");
 const tableScreen = document.getElementById("table-screen");
 const tableStatus = document.getElementById("table-status");
@@ -187,7 +188,7 @@ async function refreshSaveStatus() {
   if (!hasPermission("poker")) return;
 
   try {
-    const status = await api("/api/table/save");
+    const status = await api(`/api/table/save?game_key=${encodeURIComponent(gameTypeSelect.value)}`);
     resumeTableButton.hidden = !status.has_save;
   } catch (_error) {
     resumeTableButton.hidden = true;
@@ -410,6 +411,7 @@ function renderTable(nextTable) {
   clearTableRetry();
   tableLobby.hidden = true;
   tableScreen.hidden = false;
+  if (table.game_key) gameTypeSelect.value = table.game_key;
   tableStatus.textContent = table.hand_finished ? "Main terminée." : table.hero_turn ? "C’est à vous de jouer." : "Action PNJ en cours.";
   handNumber.textContent = `Main ${table.hand_number}`;
   pot.textContent = money(table.pot);
@@ -519,7 +521,7 @@ async function resetTable() {
   try {
     await api("/api/table", { method: "DELETE" });
     clearExtract();
-    renderTable(await api("/api/table", { method: "POST", body: "{}" }));
+    renderTable(await api("/api/table", { method: "POST", body: JSON.stringify({ game_key: table?.game_key || gameTypeSelect.value }) }));
   } catch (_error) {
     tableStatus.textContent = "Impossible de démarrer une nouvelle partie.";
   } finally {
@@ -532,7 +534,7 @@ async function createNewTable() {
   resumeTableButton.disabled = true;
 
   try {
-    renderTable(await api("/api/table", { method: "POST", body: "{}" }));
+    renderTable(await api("/api/table", { method: "POST", body: JSON.stringify({ game_key: gameTypeSelect.value }) }));
   } catch (_error) {
     tableStatus.textContent = "Impossible de créer la table.";
   } finally {
@@ -546,7 +548,7 @@ async function resumeTable() {
   newTableButton.disabled = true;
 
   try {
-    renderTable(await api("/api/table/resume", { method: "POST", body: "{}" }));
+    renderTable(await api("/api/table/resume", { method: "POST", body: JSON.stringify({ game_key: gameTypeSelect.value }) }));
   } catch (_error) {
     tableStatus.textContent = "Aucune partie à reprendre.";
     refreshSaveStatus();
@@ -827,6 +829,7 @@ userCreateForm.addEventListener("submit", async (event) => {
 
 newTableButton.addEventListener("click", createNewTable);
 resumeTableButton.addEventListener("click", resumeTable);
+gameTypeSelect.addEventListener("change", refreshSaveStatus);
 
 leaveTableButton.addEventListener("click", leaveTable);
 resetTableButton.addEventListener("click", resetTable);

@@ -17,8 +17,9 @@
 .user-chip { width: fit-content; }
 .session-actions { justify-content: flex-end; margin: 0 0 1.5rem; }
 .session-actions .user-chip { margin: 0; }
-.card-heading { display: block; }
+.card-heading { display: grid; align-items: stretch; }
 .card-heading .primary-button { width: 100%; margin-top: 1.25rem; }
+.game-type-field { max-width: none; }
 .lobby-actions { display: grid; grid-template-columns: 1fr; gap: .65rem; margin-top: 1.25rem; }
 .lobby-actions .primary-button { margin-top: 0; }
 .game-form { grid-template-columns: 1fr; }
