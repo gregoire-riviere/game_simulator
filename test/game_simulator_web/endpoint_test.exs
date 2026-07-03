@@ -197,6 +197,21 @@ defmodule GameSimulatorWeb.EndpointTest do
     assert Enum.all?(Enum.reject(players, &(&1["id"] == "hero")), &(&1["cards"] == "hidden"))
   end
 
+  test "creates a five-player NL2 table" do
+    user = "table-5-user-#{System.unique_integer([:positive])}"
+    assert :ok = Users.add(user, "a-long-test-password", ["poker"])
+    {:ok, token, _expiration} = Auth.issue_token(user)
+
+    response =
+      conn(:post, "/api/table", %{game_key: "poker:cash_nl2_5"})
+      |> put_req_header("authorization", "Bearer #{token}")
+      |> then(&Endpoint.call(&1, Endpoint.init([])))
+
+    assert response.status == 201
+    assert %{"format" => "NL2 5 joueurs", "players" => players} = Poison.decode!(response.resp_body)
+    assert length(players) == 5
+  end
+
   test "reports save status and resumes a saved table" do
     user = "save-user-#{System.unique_integer([:positive])}"
     assert :ok = Users.add(user, "a-long-test-password", ["poker"])
