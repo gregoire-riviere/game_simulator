@@ -103,6 +103,20 @@ defmodule Poker.GameTest do
     assert state.active_player == :alice
   end
 
+  test "uses UTG cutoff button small blind and big blind positions at five players" do
+    {:ok, game} = Poker.Game.start_link(small_blind: 1, big_blind: 2)
+    {:ok, _player} = Poker.Game.join(game, :button, 100, 1)
+    {:ok, _player} = Poker.Game.join(game, :small_blind, 100, 2)
+    {:ok, _player} = Poker.Game.join(game, :big_blind, 100, 3)
+    {:ok, _player} = Poker.Game.join(game, :utg, 100, 4)
+    {:ok, _player} = Poker.Game.join(game, :cutoff, 100, 5)
+    {:ok, _state} = Poker.Game.start_hand(game)
+
+    assert {:ok, state} = Poker.Game.public_state(game, :button)
+    positions = Map.new(state.players, fn {id, player} -> {id, player.position} end)
+    assert positions == %{button: :button, small_blind: :small_blind, big_blind: :big_blind, utg: :early, cutoff: :cutoff}
+  end
+
   test "identifies a continuation bet in the decision context" do
     {:ok, game} = Poker.Game.start_link(small_blind: 1, big_blind: 2)
     {:ok, _player} = Poker.Game.join(game, :alice, 100, 1)

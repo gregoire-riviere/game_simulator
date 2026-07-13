@@ -690,6 +690,8 @@ defmodule Poker.Game do
       {_count, 0} -> :button
       {_count, 1} -> :small_blind
       {_count, 2} -> :big_blind
+      {5, 4} -> :cutoff
+      {5, 3} -> :early
       {_count, value} when value == length(order) - 1 -> :cutoff
       {_count, value} when value == length(order) - 2 -> :hijack
       _other -> :early
