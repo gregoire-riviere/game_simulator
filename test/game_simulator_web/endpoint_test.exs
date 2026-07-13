@@ -77,7 +77,7 @@ defmodule GameSimulatorWeb.EndpointTest do
       |> then(&Endpoint.call(&1, Endpoint.init([])))
 
     assert response.status == 200
-    assert %{"user" => "test-user", "exp" => expiration, "permissions" => ["admin", "poker", "llm"]} = Poison.decode!(response.resp_body)
+    assert %{"user" => "test-user", "exp" => expiration, "permissions" => ["admin", "poker", "belote", "llm"]} = Poison.decode!(response.resp_body)
     assert is_integer(expiration)
   end
 
@@ -210,6 +210,22 @@ defmodule GameSimulatorWeb.EndpointTest do
     assert response.status == 201
     assert %{"format" => "NL2 5 joueurs", "players" => players} = Poison.decode!(response.resp_body)
     assert length(players) == 5
+  end
+
+  test "creates a belote game for a user with the belote permission" do
+    user = "belote-user-#{System.unique_integer([:positive])}"
+    assert :ok = Users.add(user, "a-long-test-password", ["belote"])
+    {:ok, token, _expiration} = Auth.issue_token(user)
+
+    response =
+      conn(:post, "/api/belote", %{game_key: "belote:classic", target_score: 501})
+      |> put_req_header("authorization", "Bearer #{token}")
+      |> then(&Endpoint.call(&1, Endpoint.init([])))
+
+    assert response.status == 201
+    assert %{"format" => "Belote classique", "target_score" => 501, "hand" => hand, "players" => players} = Poison.decode!(response.resp_body)
+    assert length(hand) == 5
+    assert length(players) == 4
   end
 
   test "reports save status and resumes a saved table" do

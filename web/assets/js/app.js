@@ -1,6 +1,6 @@
 // Le token ne vit que dans l'onglet courant : fermer le navigateur déconnecte l'utilisateur.
 const tokenKey = "game-simulator-token";
-const permissionNames = ["admin", "poker", "llm"];
+const permissionNames = ["admin", "poker", "belote", "llm"];
 const appShell = document.querySelector(".app-shell");
 const loginScreen = document.getElementById("login-screen");
 const dashboard = document.getElementById("dashboard");
@@ -11,10 +11,12 @@ const sessionUser = document.getElementById("session-user");
 const logoutButton = document.getElementById("logout-button");
 const menuToggle = document.getElementById("menu-toggle");
 const pokerNav = document.getElementById("poker-nav");
+const beloteNav = document.getElementById("belote-nav");
 const adminNav = document.getElementById("admin-nav");
 const adminNavLabel = document.getElementById("admin-nav-label");
 const accountNav = document.getElementById("account-nav");
 const pokerPage = document.getElementById("poker-page");
+const belotePage = document.getElementById("belote-page");
 const adminPage = document.getElementById("admin-page");
 const accountPage = document.getElementById("account-page");
 const passwordForm = document.getElementById("password-form");
@@ -52,9 +54,28 @@ const coachingWhy = document.getElementById("coaching-why");
 const handResult = document.getElementById("hand-result");
 const handResultReason = document.getElementById("hand-result-reason");
 const handResultWinners = document.getElementById("hand-result-winners");
+const beloteLobby = document.getElementById("belote-lobby");
+const beloteScreen = document.getElementById("belote-screen");
+const beloteTypeSelect = document.getElementById("belote-type-select");
+const beloteTargetSelect = document.getElementById("belote-target-select");
+const newBeloteButton = document.getElementById("new-belote-button");
+const resumeBeloteButton = document.getElementById("resume-belote-button");
+const leaveBeloteButton = document.getElementById("leave-belote-button");
+const beloteLlmMode = document.getElementById("belote-llm-mode");
+const beloteStatus = document.getElementById("belote-status");
+const beloteScore = document.getElementById("belote-score");
+const beloteContract = document.getElementById("belote-contract");
+const belotePlayers = document.getElementById("belote-players");
+const beloteTrick = document.getElementById("belote-trick");
+const beloteHand = document.getElementById("belote-hand");
+const beloteActions = document.getElementById("belote-actions");
+const beloteHistory = document.getElementById("belote-history");
 let session = null;
 let table = null;
+let beloteTable = null;
+let beloteBidAmount = null;
 let botTimer = null;
+let trickClearTimer = null;
 let tableRetryTimer = null;
 let tableRetrySeconds = 0;
 let actionPending = false;
@@ -117,12 +138,14 @@ function scheduleTableRetry() {
 
 function defaultView() {
   if (hasPermission("poker")) return "poker";
+  if (hasPermission("belote")) return "belote";
   if (hasPermission("admin")) return "admin";
   return "account";
 }
 
 function renderAccess() {
   pokerNav.hidden = !hasPermission("poker");
+  beloteNav.hidden = !hasPermission("belote");
   adminNav.hidden = !hasPermission("admin");
   adminNavLabel.hidden = !hasPermission("admin");
   llmControls.hidden = !hasPermission("llm");
@@ -130,9 +153,9 @@ function renderAccess() {
 }
 
 function showView(view) {
-  const allowedView = view === "admin" && !hasPermission("admin") ? defaultView() : view === "poker" && !hasPermission("poker") ? defaultView() : view;
-  const pages = { poker: pokerPage, admin: adminPage, account: accountPage };
-  const navs = { poker: pokerNav, admin: adminNav, account: accountNav };
+  const allowedView = view === "admin" && !hasPermission("admin") ? defaultView() : view === "poker" && !hasPermission("poker") ? defaultView() : view === "belote" && !hasPermission("belote") ? defaultView() : view;
+  const pages = { poker: pokerPage, belote: belotePage, admin: adminPage, account: accountPage };
+  const navs = { poker: pokerNav, belote: beloteNav, admin: adminNav, account: accountNav };
 
   Object.entries(pages).forEach(([name, page]) => page.hidden = name !== allowedView);
   Object.entries(navs).forEach(([name, nav]) => {
@@ -143,6 +166,7 @@ function showView(view) {
 
   if (allowedView === "admin") loadAdminUsers();
   if (allowedView === "poker") restoreTable();
+  if (allowedView === "belote") restoreBelote();
 }
 
 function money(cents) {
@@ -192,6 +216,276 @@ async function refreshSaveStatus() {
     resumeTableButton.hidden = !status.has_save;
   } catch (_error) {
     resumeTableButton.hidden = true;
+  }
+}
+
+async function restoreBelote() {
+  if (!hasPermission("belote")) return;
+
+  try {
+    renderBelote(await api(`/api/belote?game_key=${encodeURIComponent(beloteTypeSelect.value)}`));
+  } catch (error) {
+    if (error.message === "table_not_found") {
+      beloteLobby.hidden = false;
+      beloteScreen.hidden = true;
+      refreshBeloteSaveStatus();
+    }
+  }
+}
+
+async function refreshBeloteSaveStatus() {
+  if (!hasPermission("belote")) return;
+
+  try {
+    const status = await api(`/api/belote/save?game_key=${encodeURIComponent(beloteTypeSelect.value)}`);
+    resumeBeloteButton.hidden = !status.has_save;
+  } catch (_error) {
+    resumeBeloteButton.hidden = true;
+  }
+}
+
+function beloteActionLabel(action) {
+  if (action.type === "pass") return "Passer";
+  if (action.type === "coinche") return "Coincher";
+  if (action.type === "surcoinche") return "Surcoincher";
+  if (action.type === "take") return `Prendre ${suitLabel(action.suit)}`;
+  if (action.type === "bid") return `${action.amount} ${suitLabel(action.suit)}`;
+  return action.card;
+}
+
+function suitLabel(suit) {
+  return { clubs: "♣", diamonds: "♦", hearts: "♥", spades: "♠" }[suit] || suit;
+}
+
+function beloteCard(value) {
+  const element = document.createElement("span");
+  const match = value.match(/^(10|[7-9VDRA])([♣♦♥♠])$/);
+  const rank = match ? match[1] : value;
+  const suit = match ? match[2] : "";
+  element.className = "card belote-face-card";
+  if (["V", "D", "R"].includes(rank)) element.dataset.figure = rank;
+  if (suit === "♥" || suit === "♦") element.classList.add("red");
+  element.setAttribute("aria-label", value);
+  const top = document.createElement("small");
+  const center = document.createElement("strong");
+  const bottom = document.createElement("small");
+  top.textContent = `${rank}${suit}`;
+  center.textContent = suit;
+  center.dataset.suit = suit;
+  bottom.textContent = `${rank}${suit}`;
+  element.append(top, center, bottom);
+  return element;
+}
+
+function beloteChoice(label, active, click) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = `belote-choice${active ? " selected" : ""}`;
+  button.textContent = label;
+  button.onclick = click;
+  return button;
+}
+
+function renderBeloteActions() {
+  beloteActions.replaceChildren();
+
+  if (beloteTable.phase === "deal_finished") {
+    const button = beloteChoice("Donne suivante", true, nextBeloteDeal);
+    button.classList.add("belote-next-deal");
+    beloteActions.append(button);
+    return;
+  }
+
+  if (!beloteTable.hero_turn) return;
+
+  const actions = beloteTable.actions;
+  const bids = actions.filter((action) => action.type === "bid");
+  const takes = actions.filter((action) => action.type === "take");
+  const pass = actions.find((action) => action.type === "pass");
+
+  if (bids.length > 0) {
+    const amounts = [...new Set(bids.map((action) => action.amount))];
+    const panel = document.createElement("div");
+    panel.className = "belote-bid-panel";
+    const amountLabel = document.createElement("span");
+    amountLabel.textContent = "Enchère";
+    const amountChoices = document.createElement("div");
+    amountChoices.className = "belote-choice-row";
+    amounts.forEach((amount) => amountChoices.append(beloteChoice(amount, beloteBidAmount === amount, () => {
+      beloteBidAmount = amount;
+      renderBelote(beloteTable);
+    })));
+    panel.append(amountLabel, amountChoices);
+
+    if (beloteBidAmount) {
+      const suitChoices = document.createElement("div");
+      suitChoices.className = "belote-choice-row";
+      bids.filter((action) => action.amount === beloteBidAmount).forEach((action) => suitChoices.append(beloteChoice(suitLabel(action.suit), false, () => submitBeloteAction(action))));
+      panel.append(suitChoices);
+    }
+
+    beloteActions.append(panel);
+  } else if (takes.length > 0) {
+    const panel = document.createElement("div");
+    panel.className = "belote-bid-panel";
+    const label = document.createElement("span");
+    label.textContent = "Choisir l’atout";
+    const suits = document.createElement("div");
+    suits.className = "belote-choice-row";
+    takes.forEach((action) => suits.append(beloteChoice(suitLabel(action.suit), false, () => submitBeloteAction(action))));
+    panel.append(label, suits);
+    beloteActions.append(panel);
+  }
+
+  if (pass) beloteActions.append(beloteChoice("Passer", false, () => submitBeloteAction(pass)));
+  actions.filter((action) => ["coinche", "surcoinche"].includes(action.type)).forEach((action) => beloteActions.append(beloteChoice(beloteActionLabel(action), true, () => submitBeloteAction(action))));
+}
+
+function renderBelote(nextTable) {
+  beloteTable = nextTable;
+  if (!beloteTable.actions.some((action) => action.type === "bid")) beloteBidAmount = null;
+  clearTimeout(botTimer);
+  clearTimeout(trickClearTimer);
+  beloteLobby.hidden = true;
+  beloteScreen.hidden = false;
+  beloteTypeSelect.value = beloteTable.game_key;
+  beloteLlmMode.hidden = !hasPermission("llm");
+  beloteLlmMode.disabled = !beloteTable.llm_available;
+  beloteLlmMode.value = beloteTable.llm_mode || "local";
+  beloteScore.textContent = `Votre équipe ${beloteTable.scores.hero} — ${beloteTable.scores.opponents} Adversaires`;
+  const taker = beloteTable.contract && beloteTable.players.find((player) => player.seat === beloteTable.contract.taker);
+  beloteContract.textContent = beloteTable.contract ? `Atout : ${beloteTable.trump} · Contrat : ${beloteTable.contract.amount} ${beloteTable.contract.trump} · Preneur : ${taker?.name || "—"}` : `Carte retournée : ${beloteTable.turned_card || "—"}`;
+  const activePlayer = beloteTable.players.find((player) => player.active);
+  beloteStatus.textContent = beloteTable.match_finished ? "Match terminé." : beloteTable.phase === "deal_finished" ? beloteTable.last_event : beloteTable.hero_turn ? "À vous de jouer." : activePlayer ? `Au tour de ${activePlayer.name}.` : "Les PNJ réfléchissent…";
+  belotePlayers.replaceChildren(...beloteTable.players.map((player) => {
+    const item = document.createElement("article");
+    item.className = `belote-player belote-player-${player.seat}${player.active ? " active" : ""}${player.taker ? " taker" : ""}`;
+    item.innerHTML = "<strong></strong><span></span><em></em>";
+    item.querySelector("strong").textContent = player.name;
+    item.querySelector("span").textContent = player.active ? "À jouer" : player.taker ? `Preneur · ${player.card_count} cartes` : player.pass_status === "second_round" ? "Refus au 2e tour" : player.pass_status === "folded" ? "A passé" : player.seat === 4 ? "Votre main" : `${player.card_count} cartes`;
+    item.querySelector("em").textContent = player.taker ? "Preneur" : player.pass_status === "second_round" ? "2" : player.pass_status === "folded" ? "Couché" : "";
+    return item;
+  }));
+  const displayedTrick = beloteTable.trick.length > 0 ? beloteTable.trick : beloteTable.last_trick;
+  beloteTrick.classList.toggle("last-trick", beloteTable.trick.length === 0 && displayedTrick.length > 0);
+  const trickCards = displayedTrick.map((entry) => {
+    const item = document.createElement("div");
+    item.className = `belote-trick-card belote-trick-seat-${entry.seat}`;
+    item.append(beloteCard(entry.card));
+    return item;
+  });
+
+  if (trickCards.length === 0 && beloteTable.turned_card) {
+    const turned = document.createElement("div");
+    turned.className = "belote-turned-card";
+    const label = document.createElement("small");
+    label.textContent = "Carte retournée";
+    turned.append(label, beloteCard(beloteTable.turned_card));
+    beloteTrick.replaceChildren(turned);
+  } else {
+    beloteTrick.replaceChildren(...trickCards);
+  }
+  const legalCards = new Map(beloteTable.actions.filter((action) => action.type === "play").map((action) => [action.card, action]));
+  beloteHand.replaceChildren(...beloteTable.hand.map((value) => {
+    const playable = legalCards.get(value);
+    const item = beloteCard(value);
+    item.classList.add("belote-card");
+    if (playable) {
+      item.classList.add("playable");
+      item.tabIndex = 0;
+      item.setAttribute("role", "button");
+      item.onclick = () => submitBeloteAction(playable);
+      item.onkeydown = (event) => { if (event.key === "Enter" || event.key === " ") submitBeloteAction(playable); };
+    } else {
+      item.classList.add("disabled");
+    }
+    return item;
+  }));
+  renderBeloteActions();
+
+  beloteHistory.replaceChildren();
+  if (beloteTable.last_trick.length > 0) {
+    const item = document.createElement("li");
+    const cards = beloteTable.last_trick.map((entry) => `${beloteTable.players.find((player) => player.seat === entry.seat)?.name || ""} ${entry.card}`).join(" · ");
+    const winner = beloteTable.players.find((player) => player.seat === beloteTable.last_trick_winner)?.name || "";
+    item.textContent = `${cards} — ${winner} remporte ${beloteTable.last_trick_points} points.`;
+    beloteHistory.append(item);
+  }
+  beloteTable.deal_history.forEach((deal) => {
+    const item = document.createElement("li");
+    item.textContent = `Donne ${deal.number} — ${deal.taker} a pris ${deal.amount} ${deal.trump}. ${deal.winner} gagne : votre équipe +${deal.scores.hero}, adversaires +${deal.scores.opponents}.`;
+    beloteHistory.append(item);
+  });
+
+  if (beloteTable.trick_just_completed) {
+    trickClearTimer = setTimeout(() => {
+      beloteTrick.replaceChildren();
+      beloteTrick.classList.remove("last-trick");
+    }, 1200);
+  }
+
+  if (!beloteTable.match_finished && beloteTable.phase !== "deal_finished" && !beloteTable.hero_turn) botTimer = setTimeout(advanceBeloteBot, beloteTable.trick_just_completed ? 1800 : 650);
+}
+
+async function submitBeloteAction(action) {
+  try {
+    renderBelote(await api("/api/belote/action", { method: "POST", body: JSON.stringify({ ...action, action: action.type, game_key: beloteTable.game_key }) }));
+  } catch (_error) {
+    beloteStatus.textContent = "Cette action n’est plus disponible.";
+  }
+}
+
+async function advanceBeloteBot() {
+  try {
+    renderBelote(await api("/api/belote/advance-bot", { method: "POST", body: JSON.stringify({ game_key: beloteTable.game_key }) }));
+  } catch (_error) {
+    restoreBelote();
+  }
+}
+
+async function nextBeloteDeal() {
+  try {
+    renderBelote(await api("/api/belote/next-deal", { method: "POST", body: JSON.stringify({ game_key: beloteTable.game_key }) }));
+  } catch (_error) {
+    beloteStatus.textContent = "Impossible de démarrer la donne suivante.";
+  }
+}
+
+async function createBelote() {
+  try {
+    renderBelote(await api("/api/belote", { method: "POST", body: JSON.stringify({ game_key: beloteTypeSelect.value, target_score: Number(beloteTargetSelect.value) }) }));
+  } catch (_error) {
+    beloteStatus.textContent = "Impossible de créer la partie.";
+  }
+}
+
+async function resumeBelote() {
+  try {
+    renderBelote(await api("/api/belote/resume", { method: "POST", body: JSON.stringify({ game_key: beloteTypeSelect.value }) }));
+  } catch (_error) {
+    beloteStatus.textContent = "Aucune partie à reprendre.";
+  }
+}
+
+async function leaveBelote() {
+  try {
+    await api(`/api/belote?game_key=${encodeURIComponent(beloteTable.game_key)}`, { method: "DELETE" });
+    beloteTable = null;
+    beloteScreen.hidden = true;
+    beloteLobby.hidden = false;
+    refreshBeloteSaveStatus();
+  } catch (_error) {
+    beloteStatus.textContent = "Impossible de quitter la partie.";
+  }
+}
+
+async function setBeloteLlmMode() {
+  if (!beloteTable || !beloteTable.llm_available) return;
+
+  try {
+    renderBelote(await api("/api/belote/llm-mode", { method: "POST", body: JSON.stringify({ game_key: beloteTable.game_key, mode: beloteLlmMode.value }) }));
+  } catch (_error) {
+    beloteStatus.textContent = "Impossible de modifier le mode PNJ.";
   }
 }
 
@@ -790,7 +1084,7 @@ menuToggle.addEventListener("click", () => {
   menuToggle.querySelector("span").textContent = collapsed ? "›" : "‹";
 });
 
-[pokerNav, adminNav, accountNav].forEach((nav) => nav.addEventListener("click", () => showView(nav.dataset.view)));
+[pokerNav, beloteNav, adminNav, accountNav].forEach((nav) => nav.addEventListener("click", () => showView(nav.dataset.view)));
 
 passwordForm.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -838,6 +1132,11 @@ extractButton.addEventListener("click", extractHands);
 copyExtractButton.addEventListener("click", copyExtract);
 closeExtractButton.addEventListener("click", closeExtract);
 coachingButton.addEventListener("click", requestCoaching);
+newBeloteButton.addEventListener("click", createBelote);
+resumeBeloteButton.addEventListener("click", resumeBelote);
+leaveBeloteButton.addEventListener("click", leaveBelote);
+beloteTypeSelect.addEventListener("change", refreshBeloteSaveStatus);
+beloteLlmMode.addEventListener("change", setBeloteLlmMode);
 logoutButton.addEventListener("click", logout);
 
 restoreSession();

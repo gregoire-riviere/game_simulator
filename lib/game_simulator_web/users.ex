@@ -8,7 +8,7 @@ defmodule GameSimulatorWeb.Users do
   @iterations 600_000
   @salt_size 16
   @hash_size 32
-  @allowed_permissions ["admin", "poker", "llm"]
+  @allowed_permissions ["admin", "poker", "belote", "llm"]
   @max_failed_logins 5
   @lock_seconds 43_200
 

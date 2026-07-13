@@ -61,4 +61,40 @@ defmodule GameSimulator.Tables do
   end
 
   def via(owner), do: {:via, Registry, {GameSimulator.TableRegistry, owner}}
+
+  def belote_via(owner, game_key), do: {:via, Registry, {GameSimulator.TableRegistry, {owner, game_key}}}
+
+  def belote_table(owner, game_key) do
+    case Registry.lookup(GameSimulator.TableRegistry, {owner, game_key}) do
+      [{pid, _value}] when is_pid(pid) -> if(Process.alive?(pid), do: {:ok, pid}, else: :error)
+      [] -> :error
+    end
+  end
+
+  def start_new_belote(owner, game_key, target_score) do
+    stop_belote(owner, game_key)
+    DynamicSupervisor.start_child(GameSimulator.TableSupervisor, {Belote.Table, owner: owner, name: belote_via(owner, game_key), game_key: game_key, target_score: target_score})
+  end
+
+  def resume_belote(owner, game_key) do
+    case belote_table(owner, game_key) do
+      {:ok, table} -> {:ok, table}
+      :error ->
+        with {:ok, snapshot} <- GameSimulator.GameSaves.get(owner, game_key) do
+          DynamicSupervisor.start_child(GameSimulator.TableSupervisor, {Belote.Table, owner: owner, name: belote_via(owner, game_key), game_key: game_key, snapshot: snapshot})
+        else
+          {:error, reason} when reason in [:invalid_save, :unsupported_save_version] ->
+            _ = GameSimulator.GameSaves.delete(owner, game_key)
+            {:error, :not_found}
+          {:error, reason} -> {:error, reason}
+        end
+    end
+  end
+
+  def stop_belote(owner, game_key) do
+    case belote_table(owner, game_key) do
+      {:ok, table} -> DynamicSupervisor.terminate_child(GameSimulator.TableSupervisor, table)
+      :error -> :ok
+    end
+  end
 end

@@ -3,16 +3,17 @@
 [English version](README.en.md)
 
 Game Simulator est une application Elixir qui expose une interface web locale et
-une API JSON pour jouer des mains de poker contre des PNJ. Elle peut tourner en
-developpement avec `mix` ou en production via une release Mix.
+une API JSON pour jouer au poker ou à la belote contre des PNJ. Elle peut
+tourner en developpement avec `mix` ou en production via une release Mix.
 
 Le projet contient aujourd'hui :
 
 - un serveur HTTP Plug/Cowboy ;
 - une interface statique compilee depuis `web/` vers `priv/static/` ;
 - une authentification locale SQLite avec permissions et tokens signes ;
-- une table temporaire par utilisateur authentifie ;
+- des tables temporaires et des sauvegardes distinctes par utilisateur et par jeu ;
 - un moteur de poker NL2 6-max avec PNJ heuristiques ;
+- un moteur de belote classique et de coinche à quatre joueurs avec PNJ deterministes ;
 - un shadow mode LLM optionnel pour auditer des decisions sans modifier le jeu.
 
 ## Table des matieres
@@ -22,6 +23,7 @@ Le projet contient aujourd'hui :
   - [Installation et demarrage](#installation-et-demarrage)
   - [Creer un utilisateur](#creer-un-utilisateur)
   - [Jouer](#jouer)
+  - [Jouer à la belote](#jouer-a-la-belote)
   - [Configurer l'application](#configurer-lapplication)
   - [Shadow mode LLM](#shadow-mode-llm)
   - [Release](#release)
@@ -31,6 +33,7 @@ Le projet contient aujourd'hui :
   - [Commandes de developpement](#commandes-de-developpement)
   - [API HTTP](#api-http)
   - [Poker et PNJ](#poker-et-pnj)
+  - [Belote et PNJ](#belote-et-pnj)
   - [Client web](#client-web)
   - [Securite](#securite)
 
@@ -70,7 +73,7 @@ mix run -e 'IO.inspect(GameSimulatorWeb.Users.add("admin", "a-long-unique-passwo
 ```
 
 Les utilisateurs sont stockes dans la table SQLite `users`. Les permissions
-valides sont `admin`, `poker` et `llm`; `admin` donne acces a tout. Si un ancien
+valides sont `admin`, `poker`, `belote` et `llm`; `admin` donne acces a tout. Si un ancien
 fichier `GAME_SIMULATOR_USERS_FILE` existe au premier demarrage, ses comptes sont
 importes une fois comme admins.
 
@@ -96,6 +99,28 @@ Le mode actuel cible une table cash-game NL2 6-max simplifiee :
 - pas de rake dans cette V1.
 
 Les PNJ utilisent des heuristiques locales, pas des appels LLM.
+
+### Jouer à la belote
+
+La belote se lance depuis l'interface avec la permission `belote`. Deux formats
+sont disponibles : belote classique et coinche, à quatre joueurs, avec le héros
+au siège 4 et son partenaire au siège 2. Les objectifs de match sont `501`,
+`701`, `1000` (par défaut) ou `2000` points.
+
+Le moteur applique les règles côté serveur : prise en deux tours et redonne en
+classique, enchères de 80 à 160, coinche et surcoinche en coinche, suivi de
+couleur, coupe et surcoupe. Les annonces ne sont pas incluses. Les plis, le dix
+de der, le capot et les contrats déterminent le score.
+
+La partie est sauvegardée automatiquement et séparément du poker, par
+utilisateur et par format. Vous pouvez donc reprendre indépendamment une
+partie de belote classique, une coinche et une table de poker.
+
+Par défaut, les PNJ de belote utilisent un algorithme local déterministe. Le
+mode LLM, réservé aux utilisateurs ayant aussi la permission `llm`, est
+optionnel : il ne peut choisir que parmi les actions légales et est limité à 10
+décisions PNJ par match. En cas de quota atteint, d'erreur ou de délai d'attente,
+l'algorithme local reprend immédiatement la main.
 
 ### Configurer l'application
 
@@ -211,6 +236,7 @@ servi publiquement.
 - `lib/game_simulator/` : supervision, configuration et gestion des tables.
 - `lib/game_simulator_web/` : endpoint HTTP, authentification et utilisateurs.
 - `lib/poker/` : moteur de jeu, profils PNJ, decisions et audit LLM.
+- `lib/belote/` : moteur de belote, decideur PNJ, option LLM et session de table.
 - `web/` : sources HTML, CSS, JavaScript et assets du client.
 - `scripts/` : scripts d'analyse et de simulation.
 - `test/` : tests unitaires et tests d'endpoint.
@@ -269,6 +295,15 @@ Les routes JSON disponibles sont :
 | `POST /api/table/next-hand` | Lance la main suivante apres une main terminee. |
 | `POST /api/table/llm-mode` | Change le mode LLM de la table courante : `llm`, `shadow` ou `off`. |
 | `DELETE /api/table` | Arrete la table temporaire de l'utilisateur. |
+| `GET /api/belote/save?game_key=belote:classic` | Indique si une sauvegarde de belote existe. |
+| `POST /api/belote` | Cree une partie avec `game_key` (`belote:classic` ou `belote:coinche`) et `target_score`. |
+| `POST /api/belote/resume` | Reprend la sauvegarde du format demande. |
+| `GET /api/belote` | Retourne l'etat public de la partie en cours. |
+| `POST /api/belote/action` | Joue une action humaine : `pass`, `take`, `bid`, `coinche`, `surcoinche` ou `play`. |
+| `POST /api/belote/advance-bot` | Avance exactement une decision PNJ. |
+| `POST /api/belote/next-deal` | Lance la donne suivante apres une donne terminee. |
+| `POST /api/belote/llm-mode` | Choisit `local` ou `llm` pour la table de belote ; permission `llm` requise. |
+| `DELETE /api/belote` | Arrete la partie temporaire de belote. |
 
 Les routes de table ne font pas confiance a un identifiant fourni par le
 navigateur : l'utilisateur vient toujours du token verifie. Les actions et les
@@ -288,6 +323,19 @@ Les decisions tiennent compte du prix a payer, des pot odds, du sizing, de la
 pression de stack, des situations preflop larges et de categories postflop
 simples. Les mains faites avec cartes privees sont distinguees des mains surtout
 composees par le board.
+
+### Belote et PNJ
+
+`Belote.Game` est le moteur de règles déterministe. Il valide chaque enchère et
+chaque carte jouée ; ni le navigateur ni le LLM ne peuvent contourner une action
+légale. `Belote.Decision` est le décideur local de référence : il évalue la
+force de la main pour les prises et enchères, puis choisit une carte légale en
+tenant compte du contrat, des cartes sorties, du pli et du partenaire.
+
+`Belote.Decision.LLM` est une option de décision bornée. Il reçoit uniquement
+les informations publiques utiles au PNJ, sa main et la liste des actions
+légales. Sa réponse est validée par le moteur ; tout échec utilise immédiatement
+la décision déterministe.
 
 ### Client web
 

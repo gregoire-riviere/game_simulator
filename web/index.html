@@ -39,6 +39,10 @@
               <span aria-hidden="true">♠</span>
               <span class="nav-link-text">Poker</span>
             </button>
+            <button id="belote-nav" class="nav-link" type="button" title="Belote" data-view="belote">
+              <span aria-hidden="true">♣</span>
+              <span class="nav-link-text">Belote</span>
+            </button>
             <p id="admin-nav-label" class="nav-section-label" hidden>Administration</p>
             <button id="admin-nav" class="nav-link" type="button" title="Utilisateurs" data-view="admin" hidden>
               <span aria-hidden="true">⚙</span>
@@ -158,6 +162,50 @@
           </section>
         </section>
 
+        <section id="belote-page" class="poker-page content-page" hidden aria-labelledby="belote-title">
+          <header class="poker-header">
+            <div class="page-heading">
+              <p class="eyebrow">Jeu</p>
+              <h1 id="belote-title">Belote</h1>
+              <p class="intro">Belote classique et coinche contre des PNJ déterministes.</p>
+            </div>
+          </header>
+          <section id="belote-lobby" class="new-game-card">
+            <div class="card-heading">
+              <div>
+                <h2>Nouvelle partie</h2>
+                <label class="game-type-field" for="belote-type-select">Format
+                  <select id="belote-type-select"><option value="belote:classic">Belote classique</option><option value="belote:coinche">Coinche</option></select>
+                </label>
+                <label class="game-type-field" for="belote-target-select">Objectif
+                  <select id="belote-target-select"><option value="501">501 points</option><option value="701">701 points</option><option value="1000" selected>1000 points</option><option value="2000">2000 points</option></select>
+                </label>
+              </div>
+              <div class="lobby-actions">
+                <button id="resume-belote-button" class="primary-button" type="button" hidden>Reprendre <span aria-hidden="true">→</span></button>
+                <button id="new-belote-button" class="primary-button" type="button">Nouvelle partie <span aria-hidden="true">→</span></button>
+              </div>
+            </div>
+          </section>
+          <section id="belote-screen" class="table-screen" hidden aria-label="Table de belote">
+            <div class="table-toolbar">
+              <p id="belote-status" class="form-status" role="status" aria-live="polite"></p>
+              <div class="table-toolbar-actions"><select id="belote-llm-mode" class="llm-mode-select" aria-label="Mode PNJ"><option value="local">PNJ déterministes</option><option value="llm">PNJ LLM (10 max)</option></select><button id="leave-belote-button" class="leave-table-button" type="button">Quitter</button></div>
+            </div>
+            <section class="belote-table" aria-label="Plateau de belote">
+              <header class="belote-table-header">
+                <div><p class="eyebrow">Manche en cours</p><h2 id="belote-score">Score</h2></div>
+                <p id="belote-contract"></p>
+              </header>
+              <div id="belote-players" class="belote-players"></div>
+              <div id="belote-trick" class="belote-trick" aria-label="Pli en cours"></div>
+              <div id="belote-hand" class="belote-hand" aria-label="Vos cartes"></div>
+            </section>
+            <div id="belote-actions" class="belote-actions" aria-label="Actions de belote"></div>
+            <section class="activity-card"><h2>Dernier pli et historique des donnes</h2><ol id="belote-history"></ol></section>
+          </section>
+        </section>
+
         <section id="admin-page" class="poker-page content-page" hidden aria-labelledby="admin-title">
           <header class="poker-header">
             <div class="page-heading">
@@ -178,6 +226,7 @@
                 <legend>Permissions</legend>
                 <label><input name="permissions" type="checkbox" value="admin" /> Admin</label>
                 <label><input name="permissions" type="checkbox" value="poker" checked /> Poker</label>
+                <label><input name="permissions" type="checkbox" value="belote" /> Belote</label>
                 <label><input name="permissions" type="checkbox" value="llm" /> LLM</label>
               </fieldset>
               <button class="primary-button" type="submit">Créer <span aria-hidden="true">→</span></button>

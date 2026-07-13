@@ -149,6 +149,126 @@ defmodule GameSimulatorWeb.Endpoint do
     end)
   end
 
+  get "/api/belote/save" do
+    authenticated(conn, "belote", fn conn, account ->
+      conn = Plug.Conn.fetch_query_params(conn)
+
+      with {:ok, game_key} <- parse_belote_game_key(conn.query_params["game_key"]) do
+        case GameSimulator.Tables.save_status(account.username, game_key) do
+          {:ok, has_save} -> send_json(conn, 200, %{has_save: has_save})
+          {:error, _reason} -> send_json(conn, 500, %{error: "save_status_unavailable"})
+        end
+      else
+        {:error, reason} -> table_error(conn, reason)
+      end
+    end)
+  end
+
+  post "/api/belote" do
+    authenticated(conn, "belote", fn conn, account ->
+      with {:ok, game_key} <- parse_belote_game_key(conn.body_params["game_key"]),
+           {:ok, target_score} <- parse_belote_target(conn.body_params["target_score"]),
+           {:ok, table} <- GameSimulator.Tables.start_new_belote(account.username, game_key, target_score),
+           {:ok, state} <- Belote.Table.state(table, account.username) do
+        send_json(conn, 201, state)
+      else
+        {:error, reason} -> table_error(conn, reason)
+      end
+    end)
+  end
+
+  post "/api/belote/resume" do
+    authenticated(conn, "belote", fn conn, account ->
+      with {:ok, game_key} <- parse_belote_game_key(conn.body_params["game_key"]),
+           {:ok, table} <- GameSimulator.Tables.resume_belote(account.username, game_key),
+           {:ok, state} <- Belote.Table.state(table, account.username) do
+        send_json(conn, 200, state)
+      else
+        {:error, :not_found} -> send_json(conn, 404, %{error: "save_not_found"})
+        {:error, reason} -> table_error(conn, reason)
+      end
+    end)
+  end
+
+  get "/api/belote" do
+    authenticated(conn, "belote", fn conn, account ->
+      conn = Plug.Conn.fetch_query_params(conn)
+
+      with {:ok, game_key} <- parse_belote_game_key(conn.query_params["game_key"]),
+           {:ok, table} <- belote_table_for(account.username, game_key),
+           {:ok, state} <- Belote.Table.state(table, account.username) do
+        send_json(conn, 200, state)
+      else
+        {:error, reason} -> table_error(conn, reason)
+      end
+    end)
+  end
+
+  post "/api/belote/action" do
+    authenticated(conn, "belote", fn conn, account ->
+      with {:ok, game_key} <- parse_belote_game_key(conn.body_params["game_key"]),
+           {:ok, table} <- belote_table_for(account.username, game_key),
+           {:ok, action} <- parse_belote_action(conn.body_params),
+           {:ok, state} <- Belote.Table.act(table, account.username, action) do
+        send_json(conn, 200, state)
+      else
+        {:error, reason} -> table_error(conn, reason)
+      end
+    end)
+  end
+
+  post "/api/belote/advance-bot" do
+    authenticated(conn, "belote", fn conn, account ->
+      with {:ok, game_key} <- parse_belote_game_key(conn.body_params["game_key"]),
+           {:ok, table} <- belote_table_for(account.username, game_key),
+           {:ok, state} <- Belote.Table.advance_bot(table, account.username) do
+        send_json(conn, 200, state)
+      else
+        {:error, reason} -> table_error(conn, reason)
+      end
+    end)
+  end
+
+  post "/api/belote/next-deal" do
+    authenticated(conn, "belote", fn conn, account ->
+      with {:ok, game_key} <- parse_belote_game_key(conn.body_params["game_key"]),
+           {:ok, table} <- belote_table_for(account.username, game_key),
+           {:ok, state} <- Belote.Table.next_deal(table, account.username) do
+        send_json(conn, 200, state)
+      else
+        {:error, reason} -> table_error(conn, reason)
+      end
+    end)
+  end
+
+  post "/api/belote/llm-mode" do
+    authenticated(conn, "llm", fn conn, account ->
+      with {:ok, game_key} <- parse_belote_game_key(conn.body_params["game_key"]),
+           {:ok, table} <- belote_table_for(account.username, game_key),
+           {:ok, mode} <- parse_belote_llm_mode(conn.body_params["mode"]),
+           {:ok, state} <- Belote.Table.set_llm_mode(table, account.username, mode) do
+        send_json(conn, 200, state)
+      else
+        {:error, reason} -> table_error(conn, reason)
+      end
+    end)
+  end
+
+  delete "/api/belote" do
+    authenticated(conn, "belote", fn conn, account ->
+      conn = Plug.Conn.fetch_query_params(conn)
+
+      with {:ok, game_key} <- parse_belote_game_key(conn.query_params["game_key"]) do
+        case GameSimulator.Tables.stop_belote(account.username, game_key) do
+          :ok -> Plug.Conn.send_resp(conn, 204, "")
+          {:error, _reason} -> send_json(conn, 500, %{error: "table_stop_failed"})
+        end
+      else
+        {:error, reason} -> table_error(conn, reason)
+      end
+    end)
+  end
+
   get "/api/table/save" do
     authenticated(conn, "poker", fn conn, account ->
       conn = Plug.Conn.fetch_query_params(conn)
@@ -337,6 +457,13 @@ defmodule GameSimulatorWeb.Endpoint do
     end
   end
 
+  def belote_table_for(user, game_key) do
+    case GameSimulator.Tables.belote_table(user, game_key) do
+      {:ok, table} -> {:ok, table}
+      :error -> {:error, :table_not_found}
+    end
+  end
+
   def scrub_llm(state, account) do
     if "llm" in account.effective_permissions do
       state
@@ -380,6 +507,40 @@ defmodule GameSimulatorWeb.Endpoint do
     if GameSimulator.Table.valid_game_key?(game_key), do: {:ok, game_key}, else: {:error, :invalid_game_key}
   end
   def parse_game_key(_game_key), do: {:error, :invalid_game_key}
+
+  def parse_belote_game_key(nil), do: {:ok, "belote:classic"}
+  def parse_belote_game_key(game_key) when game_key in ["belote:classic", "belote:coinche"], do: {:ok, game_key}
+  def parse_belote_game_key(_game_key), do: {:error, :invalid_game_key}
+
+  def parse_belote_target(nil), do: {:ok, 1000}
+  def parse_belote_target(score) when score in [501, 701, 1000, 2000], do: {:ok, score}
+  def parse_belote_target(_score), do: {:error, :invalid_target_score}
+
+  def parse_belote_action(%{"action" => "pass"}), do: {:ok, :pass}
+  def parse_belote_action(%{"action" => "coinche"}), do: {:ok, :coinche}
+  def parse_belote_action(%{"action" => "surcoinche"}), do: {:ok, :surcoinche}
+  def parse_belote_action(%{"action" => "take", "suit" => suit}), do: parse_belote_suit(suit, fn parsed_suit -> {:take, parsed_suit} end)
+  def parse_belote_action(%{"action" => "bid", "amount" => amount, "suit" => suit}) when is_integer(amount), do: parse_belote_suit(suit, fn parsed_suit -> {:bid, amount, parsed_suit} end)
+  def parse_belote_action(%{"action" => "play", "card" => card}) when is_binary(card), do: parse_belote_card(card)
+  def parse_belote_action(_params), do: {:error, :invalid_action}
+
+  def parse_belote_suit(value, fun) do
+    case Enum.find(Belote.Game.suits(), &(Atom.to_string(&1) == value)) do
+      nil -> {:error, :invalid_action}
+      suit -> {:ok, fun.(suit)}
+    end
+  end
+
+  def parse_belote_card(value) do
+    case Enum.find(Belote.Game.deck(), fn card -> Belote.Table.card_text(card) == value end) do
+      nil -> {:error, :invalid_action}
+      card -> {:ok, {:play, card}}
+    end
+  end
+
+  def parse_belote_llm_mode("local"), do: {:ok, :local}
+  def parse_belote_llm_mode("llm"), do: {:ok, :llm}
+  def parse_belote_llm_mode(_mode), do: {:error, :invalid_llm_mode}
 
   def parse_llm_mode("llm"), do: {:ok, :llm}
   def parse_llm_mode("shadow"), do: {:ok, :shadow}
