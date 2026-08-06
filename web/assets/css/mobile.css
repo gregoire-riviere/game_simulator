@@ -22,6 +22,12 @@
 .game-type-field { max-width: none; }
 .lobby-actions { display: grid; grid-template-columns: 1fr; gap: .65rem; margin-top: 1.25rem; }
 .lobby-actions .primary-button { margin-top: 0; }
+.mr-white-player-fields { grid-template-columns: 1fr; }
+.mr-white-toolbar { align-items: flex-start; }
+.mr-white-toolbar > div { display: grid; grid-template-columns: 1fr; }
+.mr-white-stage { min-height: 24rem; padding: 1.25rem; }
+.mr-white-guess-actions, .mr-white-end-actions { grid-template-columns: 1fr; }
+.mr-white-order-list li { align-items: flex-start; }
 .game-form { grid-template-columns: 1fr; }
 .game-form .primary-button, .game-form .form-status { grid-column: span 1; }
 .table-toolbar { grid-template-columns: 1fr; align-items: stretch; gap: .65rem; margin-inline: -.25rem; padding: .65rem; }

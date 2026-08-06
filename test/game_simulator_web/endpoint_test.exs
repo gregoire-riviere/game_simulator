@@ -77,7 +77,7 @@ defmodule GameSimulatorWeb.EndpointTest do
       |> then(&Endpoint.call(&1, Endpoint.init([])))
 
     assert response.status == 200
-    assert %{"user" => "test-user", "exp" => expiration, "permissions" => ["admin", "poker", "belote", "llm"]} = Poison.decode!(response.resp_body)
+    assert %{"user" => "test-user", "exp" => expiration, "permissions" => ["admin", "poker", "belote", "mr_white", "llm"]} = Poison.decode!(response.resp_body)
     assert is_integer(expiration)
   end
 
@@ -226,6 +226,32 @@ defmodule GameSimulatorWeb.EndpointTest do
     assert %{"format" => "Belote classique", "target_score" => 501, "hand" => hand, "players" => players} = Poison.decode!(response.resp_body)
     assert length(hand) == 5
     assert length(players) == 4
+  end
+
+  test "runs a private Mr. White reveal flow" do
+    user = "mr-white-user-#{System.unique_integer([:positive])}"
+    assert :ok = Users.add(user, "a-long-test-password", ["mr_white"])
+    {:ok, token, _expiration} = Auth.issue_token(user)
+
+    response =
+      conn(:post, "/api/mr-white", %{players: ["Alice", "Bob", "Chloé", "David"]})
+      |> put_req_header("authorization", "Bearer #{token}")
+      |> then(&Endpoint.call(&1, Endpoint.init([])))
+
+    assert response.status == 201
+    assert %{"phase" => "reveal", "players" => players, "reveal_player" => reveal_player} = Poison.decode!(response.resp_body)
+    assert length(players) == 4
+    assert Enum.all?(players, &is_nil(&1["role"]))
+
+    secret =
+      conn(:post, "/api/mr-white/secret", %{})
+      |> put_req_header("authorization", "Bearer #{token}")
+      |> then(&Endpoint.call(&1, Endpoint.init([])))
+
+    assert secret.status == 200
+    assert %{"player_id" => player_id, "name" => name} = Poison.decode!(secret.resp_body)
+    assert player_id == reveal_player["id"]
+    assert name == reveal_player["name"]
   end
 
   test "reports save status and resumes a saved table" do

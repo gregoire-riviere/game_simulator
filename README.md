@@ -22,6 +22,7 @@ Le projet contient aujourd'hui :
   - [Prerequis](#prerequis)
   - [Installation et demarrage](#installation-et-demarrage)
   - [Creer un utilisateur](#creer-un-utilisateur)
+  - [Reinitialiser un mot de passe](#reinitialiser-un-mot-de-passe)
   - [Jouer](#jouer)
   - [Jouer à la belote](#jouer-a-la-belote)
   - [Configurer l'application](#configurer-lapplication)
@@ -73,7 +74,7 @@ mix run -e 'IO.inspect(GameSimulatorWeb.Users.add("admin", "a-long-unique-passwo
 ```
 
 Les utilisateurs sont stockes dans la table SQLite `users`. Les permissions
-valides sont `admin`, `poker`, `belote` et `llm`; `admin` donne acces a tout. Si un ancien
+valides sont `admin`, `poker`, `belote`, `mr_white` et `llm`; `admin` donne acces a tout. Si un ancien
 fichier `GAME_SIMULATOR_USERS_FILE` existe au premier demarrage, ses comptes sont
 importes une fois comme admins.
 
@@ -83,6 +84,27 @@ l'interface d'administration, ou en console :
 
 ```sh
 mix run -e 'IO.inspect(GameSimulatorWeb.Users.unlock("admin"))'
+```
+
+### Reinitialiser un mot de passe
+
+Depuis la racine du projet, indiquez uniquement le nom de l'utilisateur. Le
+nouveau mot de passe est demande deux fois sans etre affiche ni enregistre dans
+l'historique du shell :
+
+```sh
+mix user.reset_password admin
+```
+
+Si le terminal ne prend pas en charge la saisie masquee, la commande affiche un
+avertissement puis utilise une saisie visible au lieu d'echouer.
+
+Le mot de passe doit contenir au moins 12 caracteres. La commande utilise
+`GAME_SIMULATOR_DATA_DIR`; en production, fournissez-lui donc la meme
+configuration que le serveur si elle n'est pas deja chargee depuis `.env` :
+
+```sh
+GAME_SIMULATOR_DATA_DIR=/chemin/vers/data MIX_ENV=prod mix user.reset_password admin
 ```
 
 ### Jouer

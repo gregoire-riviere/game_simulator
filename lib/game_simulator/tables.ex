@@ -97,4 +97,25 @@ defmodule GameSimulator.Tables do
       :error -> :ok
     end
   end
+
+  def mr_white_via(owner), do: {:via, Registry, {GameSimulator.TableRegistry, {owner, :mr_white}}}
+
+  def mr_white_table(owner) do
+    case Registry.lookup(GameSimulator.TableRegistry, {owner, :mr_white}) do
+      [{pid, _value}] when is_pid(pid) -> if(Process.alive?(pid), do: {:ok, pid}, else: :error)
+      [] -> :error
+    end
+  end
+
+  def start_new_mr_white(owner, players) do
+    stop_mr_white(owner)
+    DynamicSupervisor.start_child(GameSimulator.TableSupervisor, {MrWhite.Table, owner: owner, name: mr_white_via(owner), players: players})
+  end
+
+  def stop_mr_white(owner) do
+    case mr_white_table(owner) do
+      {:ok, table} -> DynamicSupervisor.terminate_child(GameSimulator.TableSupervisor, table)
+      :error -> :ok
+    end
+  end
 end

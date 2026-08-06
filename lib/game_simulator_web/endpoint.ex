@@ -269,6 +269,75 @@ defmodule GameSimulatorWeb.Endpoint do
     end)
   end
 
+  post "/api/mr-white" do
+    authenticated(conn, "mr_white", fn conn, account ->
+      with {:ok, players} <- MrWhite.Game.validate_names(conn.body_params["players"]),
+           {:ok, table} <- GameSimulator.Tables.start_new_mr_white(account.username, players),
+           {:ok, state} <- MrWhite.Table.state(table, account.username) do
+        send_json(conn, 201, state)
+      else
+        {:error, reason} -> table_error(conn, reason)
+      end
+    end)
+  end
+
+  get "/api/mr-white" do
+    authenticated(conn, "mr_white", fn conn, account ->
+      case GameSimulator.Tables.mr_white_table(account.username) do
+        {:ok, table} ->
+          case MrWhite.Table.state(table, account.username) do
+            {:ok, state} -> send_json(conn, 200, state)
+            {:error, reason} -> table_error(conn, reason)
+          end
+
+        :error -> send_json(conn, 404, %{error: "table_not_found"})
+      end
+    end)
+  end
+
+  post "/api/mr-white/secret" do
+    authenticated(conn, "mr_white", fn conn, account ->
+      with {:ok, table} <- mr_white_table_for(account.username),
+           {:ok, secret} <- MrWhite.Table.secret(table, account.username) do
+        send_json(conn, 200, secret)
+      else
+        {:error, reason} -> table_error(conn, reason)
+      end
+    end)
+  end
+
+  post "/api/mr-white/action" do
+    authenticated(conn, "mr_white", fn conn, account ->
+      with {:ok, table} <- mr_white_table_for(account.username),
+           {:ok, action} <- parse_mr_white_action(conn.body_params),
+           {:ok, state} <- MrWhite.Table.act(table, account.username, action) do
+        send_json(conn, 200, state)
+      else
+        {:error, reason} -> table_error(conn, reason)
+      end
+    end)
+  end
+
+  post "/api/mr-white/restart" do
+    authenticated(conn, "mr_white", fn conn, account ->
+      with {:ok, table} <- mr_white_table_for(account.username),
+           {:ok, state} <- MrWhite.Table.restart(table, account.username) do
+        send_json(conn, 200, state)
+      else
+        {:error, reason} -> table_error(conn, reason)
+      end
+    end)
+  end
+
+  delete "/api/mr-white" do
+    authenticated(conn, "mr_white", fn conn, account ->
+      case GameSimulator.Tables.stop_mr_white(account.username) do
+        :ok -> Plug.Conn.send_resp(conn, 204, "")
+        {:error, _reason} -> send_json(conn, 500, %{error: "table_stop_failed"})
+      end
+    end)
+  end
+
   get "/api/table/save" do
     authenticated(conn, "poker", fn conn, account ->
       conn = Plug.Conn.fetch_query_params(conn)
@@ -464,6 +533,13 @@ defmodule GameSimulatorWeb.Endpoint do
     end
   end
 
+  def mr_white_table_for(user) do
+    case GameSimulator.Tables.mr_white_table(user) do
+      {:ok, table} -> {:ok, table}
+      :error -> {:error, :table_not_found}
+    end
+  end
+
   def scrub_llm(state, account) do
     if "llm" in account.effective_permissions do
       state
@@ -541,6 +617,12 @@ defmodule GameSimulatorWeb.Endpoint do
   def parse_belote_llm_mode("local"), do: {:ok, :local}
   def parse_belote_llm_mode("llm"), do: {:ok, :llm}
   def parse_belote_llm_mode(_mode), do: {:error, :invalid_llm_mode}
+
+  def parse_mr_white_action(%{"action" => "confirm_reveal"}), do: {:ok, :confirm_reveal}
+  def parse_mr_white_action(%{"action" => "next_round"}), do: {:ok, :next_round}
+  def parse_mr_white_action(%{"action" => "eliminate", "player_id" => id}) when is_integer(id), do: {:ok, {:eliminate, id}}
+  def parse_mr_white_action(%{"action" => "mr_white_guess", "accepted" => accepted}) when is_boolean(accepted), do: {:ok, {:mr_white_guess, accepted}}
+  def parse_mr_white_action(_params), do: {:error, :invalid_action}
 
   def parse_llm_mode("llm"), do: {:ok, :llm}
   def parse_llm_mode("shadow"), do: {:ok, :shadow}

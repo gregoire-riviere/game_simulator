@@ -1,6 +1,6 @@
 // Le token ne vit que dans l'onglet courant : fermer le navigateur déconnecte l'utilisateur.
 const tokenKey = "game-simulator-token";
-const permissionNames = ["admin", "poker", "belote", "llm"];
+const permissionNames = ["admin", "poker", "belote", "mr_white", "llm"];
 const appShell = document.querySelector(".app-shell");
 const loginScreen = document.getElementById("login-screen");
 const dashboard = document.getElementById("dashboard");
@@ -12,11 +12,13 @@ const logoutButton = document.getElementById("logout-button");
 const menuToggle = document.getElementById("menu-toggle");
 const pokerNav = document.getElementById("poker-nav");
 const beloteNav = document.getElementById("belote-nav");
+const mrWhiteNav = document.getElementById("mr-white-nav");
 const adminNav = document.getElementById("admin-nav");
 const adminNavLabel = document.getElementById("admin-nav-label");
 const accountNav = document.getElementById("account-nav");
 const pokerPage = document.getElementById("poker-page");
 const belotePage = document.getElementById("belote-page");
+const mrWhitePage = document.getElementById("mr-white-page");
 const adminPage = document.getElementById("admin-page");
 const accountPage = document.getElementById("account-page");
 const passwordForm = document.getElementById("password-form");
@@ -70,6 +72,16 @@ const beloteTrick = document.getElementById("belote-trick");
 const beloteHand = document.getElementById("belote-hand");
 const beloteActions = document.getElementById("belote-actions");
 const beloteHistory = document.getElementById("belote-history");
+const mrWhiteLobby = document.getElementById("mr-white-lobby");
+const mrWhiteGame = document.getElementById("mr-white-game");
+const mrWhiteForm = document.getElementById("mr-white-form");
+const mrWhitePlayerCount = document.getElementById("mr-white-player-count");
+const mrWhitePlayerFields = document.getElementById("mr-white-player-fields");
+const mrWhiteStatus = document.getElementById("mr-white-status");
+const mrWhiteRound = document.getElementById("mr-white-round");
+const mrWhiteStage = document.getElementById("mr-white-stage");
+const mrWhiteRestart = document.getElementById("mr-white-restart");
+const mrWhiteChangePlayers = document.getElementById("mr-white-change-players");
 let session = null;
 let table = null;
 let beloteTable = null;
@@ -79,6 +91,7 @@ let trickClearTimer = null;
 let tableRetryTimer = null;
 let tableRetrySeconds = 0;
 let actionPending = false;
+let mrWhiteState = null;
 
 function hasPermission(permission) {
   return session && Array.isArray(session.permissions) && session.permissions.includes(permission);
@@ -108,6 +121,7 @@ function showLogin(message = "") {
   authStatus.textContent = message;
   session = null;
   table = null;
+  mrWhiteState = null;
   actionPending = false;
   clearTimeout(botTimer);
   clearTableRetry();
@@ -139,6 +153,7 @@ function scheduleTableRetry() {
 function defaultView() {
   if (hasPermission("poker")) return "poker";
   if (hasPermission("belote")) return "belote";
+  if (hasPermission("mr_white")) return "mr-white";
   if (hasPermission("admin")) return "admin";
   return "account";
 }
@@ -146,6 +161,7 @@ function defaultView() {
 function renderAccess() {
   pokerNav.hidden = !hasPermission("poker");
   beloteNav.hidden = !hasPermission("belote");
+  mrWhiteNav.hidden = !hasPermission("mr_white");
   adminNav.hidden = !hasPermission("admin");
   adminNavLabel.hidden = !hasPermission("admin");
   llmControls.hidden = !hasPermission("llm");
@@ -153,9 +169,9 @@ function renderAccess() {
 }
 
 function showView(view) {
-  const allowedView = view === "admin" && !hasPermission("admin") ? defaultView() : view === "poker" && !hasPermission("poker") ? defaultView() : view === "belote" && !hasPermission("belote") ? defaultView() : view;
-  const pages = { poker: pokerPage, belote: belotePage, admin: adminPage, account: accountPage };
-  const navs = { poker: pokerNav, belote: beloteNav, admin: adminNav, account: accountNav };
+  const allowedView = view === "admin" && !hasPermission("admin") ? defaultView() : view === "poker" && !hasPermission("poker") ? defaultView() : view === "belote" && !hasPermission("belote") ? defaultView() : view === "mr-white" && !hasPermission("mr_white") ? defaultView() : view;
+  const pages = { poker: pokerPage, belote: belotePage, "mr-white": mrWhitePage, admin: adminPage, account: accountPage };
+  const navs = { poker: pokerNav, belote: beloteNav, "mr-white": mrWhiteNav, admin: adminNav, account: accountNav };
 
   Object.entries(pages).forEach(([name, page]) => page.hidden = name !== allowedView);
   Object.entries(navs).forEach(([name, nav]) => {
@@ -167,6 +183,7 @@ function showView(view) {
   if (allowedView === "admin") loadAdminUsers();
   if (allowedView === "poker") restoreTable();
   if (allowedView === "belote") restoreBelote();
+  if (allowedView === "mr-white") restoreMrWhite();
 }
 
 function money(cents) {
@@ -900,6 +917,254 @@ async function requestCoaching() {
   }
 }
 
+function mrWhiteNode(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+
+function mrWhiteButton(text, className, click) {
+  const button = mrWhiteNode("button", className, text);
+  button.type = "button";
+  button.onclick = click;
+  return button;
+}
+
+function renderMrWhitePlayerFields(names = null) {
+  const previous = names || Array.from(mrWhitePlayerFields.querySelectorAll("input")).map((input) => input.value);
+  const count = Number(mrWhitePlayerCount.value);
+  mrWhitePlayerFields.replaceChildren();
+
+  for (let index = 0; index < count; index += 1) {
+    const label = mrWhiteNode("label", "", `Joueur ${index + 1}`);
+    const input = document.createElement("input");
+    input.type = "text";
+    input.name = "player";
+    input.maxLength = 40;
+    input.required = true;
+    input.autocomplete = "off";
+    input.placeholder = `Prénom du joueur ${index + 1}`;
+    input.value = previous[index] || "";
+    label.append(input);
+    mrWhitePlayerFields.append(label);
+  }
+}
+
+async function restoreMrWhite() {
+  if (!hasPermission("mr_white")) return;
+
+  try {
+    renderMrWhite(await api("/api/mr-white"));
+  } catch (error) {
+    if (error.message === "table_not_found") {
+      mrWhiteState = null;
+      mrWhiteLobby.hidden = false;
+      mrWhiteGame.hidden = true;
+      return;
+    }
+
+    if (error.message !== "session_expired") mrWhiteStatus.textContent = "Impossible de retrouver la partie.";
+  }
+}
+
+async function createMrWhite(event) {
+  event.preventDefault();
+  const players = Array.from(mrWhitePlayerFields.querySelectorAll("input")).map((input) => input.value.trim());
+  mrWhiteStatus.textContent = "";
+
+  try {
+    renderMrWhite(await api("/api/mr-white", { method: "POST", body: JSON.stringify({ players }) }));
+  } catch (error) {
+    mrWhiteStatus.textContent = error.message === "invalid_players" ? "Utilisez de 3 à 10 noms différents, de 40 caractères maximum." : "Impossible de lancer la partie.";
+  }
+}
+
+function mrWhiteRoleLabel(role) {
+  return { civil: "Civil", spy: "Espion", mr_white: "Mr. White" }[role] || "Rôle inconnu";
+}
+
+function mrWhiteOrderedPlayers(state) {
+  return [...state.players].sort((left, right) => left.position - right.position);
+}
+
+function renderMrWhiteOrder(state, title = "Ordre de parole") {
+  const section = mrWhiteNode("section", "mr-white-order");
+  section.append(mrWhiteNode("h3", "", title));
+  const list = mrWhiteNode("ol", "mr-white-order-list");
+
+  mrWhiteOrderedPlayers(state).forEach((player) => {
+    const item = mrWhiteNode("li", player.active ? "" : "eliminated");
+    item.append(mrWhiteNode("strong", "", player.name));
+    if (!player.active) item.append(mrWhiteNode("span", "", player.role ? `Éliminé · ${mrWhiteRoleLabel(player.role)}` : "Éliminé"));
+    list.append(item);
+  });
+
+  section.append(list);
+  return section;
+}
+
+function renderMrWhite(nextState) {
+  mrWhiteState = nextState;
+  mrWhiteLobby.hidden = true;
+  mrWhiteGame.hidden = false;
+  mrWhiteRound.textContent = nextState.phase === "reveal" ? "Distribution des mots" : `Tour ${nextState.round}`;
+  mrWhiteStage.replaceChildren();
+
+  if (nextState.phase === "reveal") renderMrWhiteReveal(nextState);
+  if (nextState.phase === "vote") renderMrWhiteVote(nextState);
+  if (nextState.phase === "elimination") renderMrWhiteElimination(nextState);
+  if (nextState.phase === "finished") renderMrWhiteFinished(nextState);
+}
+
+function renderMrWhiteReveal(state) {
+  const player = state.reveal_player;
+  mrWhiteStage.append(
+    mrWhiteNode("p", "eyebrow", `Joueur ${player.number} sur ${player.total}`),
+    mrWhiteNode("h2", "mr-white-main-title", `Passez le téléphone à ${player.name}`),
+    mrWhiteNode("p", "mr-white-instruction", "Personne d’autre ne doit regarder l’écran."),
+    mrWhiteButton("Voir mon mot", "primary-button mr-white-main-action", revealMrWhiteSecret)
+  );
+}
+
+async function revealMrWhiteSecret() {
+  try {
+    const secret = await api("/api/mr-white/secret", { method: "POST", body: "{}" });
+    mrWhiteStage.replaceChildren();
+    mrWhiteStage.classList.add("secret-visible");
+
+    if (secret.role === "mr_white") {
+      mrWhiteStage.append(
+        mrWhiteNode("p", "eyebrow", secret.name),
+        mrWhiteNode("h2", "mr-white-secret-word", "Vous êtes Mr. White"),
+        mrWhiteNode("p", "mr-white-instruction", "Vous n’avez aucun mot. Écoutez bien les autres et improvisez.")
+      );
+    } else {
+      mrWhiteStage.append(
+        mrWhiteNode("p", "eyebrow", secret.name),
+        mrWhiteNode("p", "mr-white-instruction", "Votre mot secret est"),
+        mrWhiteNode("h2", "mr-white-secret-word", secret.word)
+      );
+    }
+
+    mrWhiteStage.append(mrWhiteButton("J’ai mémorisé · masquer", "primary-button mr-white-main-action", confirmMrWhiteReveal));
+  } catch (_error) {
+    mrWhiteStatus.textContent = "Impossible d’afficher le mot.";
+  }
+}
+
+async function confirmMrWhiteReveal() {
+  mrWhiteStage.classList.remove("secret-visible");
+  await mrWhiteAction({ action: "confirm_reveal" });
+}
+
+function renderMrWhiteVote(state) {
+  mrWhiteStage.append(
+    mrWhiteNode("p", "eyebrow", `Tour ${state.round}`),
+    mrWhiteNode("h2", "mr-white-main-title", "Décrivez votre mot, puis éliminez un joueur"),
+    renderMrWhiteOrder(state)
+  );
+
+  const choices = mrWhiteNode("div", "mr-white-player-choices");
+  mrWhiteOrderedPlayers(state).filter((player) => player.active).forEach((player) => {
+    choices.append(mrWhiteButton(player.name, "mr-white-player-button", () => {
+      if (confirm(`Le groupe élimine ${player.name} ?`)) mrWhiteAction({ action: "eliminate", player_id: player.id });
+    }));
+  });
+  mrWhiteStage.append(mrWhiteNode("h3", "mr-white-choice-title", "Qui est éliminé ?"), choices);
+}
+
+function renderMrWhiteElimination(state) {
+  const player = state.eliminated;
+  mrWhiteStage.append(
+    mrWhiteNode("p", "eyebrow", "Rôle révélé"),
+    mrWhiteNode("h2", "mr-white-main-title", player.name),
+    mrWhiteNode("strong", `mr-white-role role-${player.role}`, mrWhiteRoleLabel(player.role))
+  );
+
+  if (player.role === "mr_white" && state.guess_result === null) {
+    const actions = mrWhiteNode("div", "mr-white-guess-actions");
+    actions.append(
+      mrWhiteButton("Bonne réponse", "primary-button", () => mrWhiteAction({ action: "mr_white_guess", accepted: true })),
+      mrWhiteButton("Mauvaise réponse", "leave-table-button", () => mrWhiteAction({ action: "mr_white_guess", accepted: false }))
+    );
+    mrWhiteStage.append(
+      mrWhiteNode("p", "mr-white-instruction", "Mr. White annonce maintenant le mot des civils à voix haute. Le groupe valide sa réponse."),
+      actions
+    );
+    return;
+  }
+
+  mrWhiteStage.append(mrWhiteButton("Tour suivant", "primary-button mr-white-main-action", () => mrWhiteAction({ action: "next_round" })));
+}
+
+function renderMrWhiteFinished(state) {
+  const messages = {
+    both_infiltrators_eliminated: "Mr. White et l’espion ont tous les deux été éliminés.",
+    two_players_remaining: "Il ne reste que deux joueurs. Découvrez tous les rôles.",
+    mr_white_guess_accepted: "Le groupe valide la proposition de Mr. White."
+  };
+  const roles = mrWhiteNode("div", "mr-white-final-roles");
+
+  mrWhiteOrderedPlayers(state).forEach((player) => {
+    const row = mrWhiteNode("div", `mr-white-final-player role-${player.role}`);
+    row.append(mrWhiteNode("strong", "", player.name), mrWhiteNode("span", "", mrWhiteRoleLabel(player.role)));
+    roles.append(row);
+  });
+
+  const words = mrWhiteNode("div", "mr-white-final-words");
+  words.append(
+    mrWhiteNode("p", "", `Mot des civils : ${state.words.civil}`),
+    mrWhiteNode("p", "", `Mot de l’espion : ${state.words.spy}`)
+  );
+  const actions = mrWhiteNode("div", "mr-white-end-actions");
+  actions.append(
+    mrWhiteButton("Rejouer avec les mêmes noms", "primary-button", restartMrWhite),
+    mrWhiteButton("Changer les joueurs", "leave-table-button", changeMrWhitePlayers)
+  );
+  mrWhiteStage.append(
+    mrWhiteNode("p", "eyebrow", "Partie terminée"),
+    mrWhiteNode("h2", "mr-white-main-title", messages[state.end_reason] || "Partie terminée"),
+    roles,
+    words,
+    actions
+  );
+}
+
+async function mrWhiteAction(body) {
+  try {
+    renderMrWhite(await api("/api/mr-white/action", { method: "POST", body: JSON.stringify(body) }));
+  } catch (_error) {
+    mrWhiteStatus.textContent = "Cette action n’est plus disponible.";
+  }
+}
+
+async function restartMrWhite() {
+  if (mrWhiteState && mrWhiteState.phase !== "finished" && !confirm("Recommencer immédiatement avec les mêmes joueurs ?")) return;
+
+  try {
+    renderMrWhite(await api("/api/mr-white/restart", { method: "POST", body: "{}" }));
+  } catch (_error) {
+    mrWhiteStatus.textContent = "Impossible de recommencer la partie.";
+  }
+}
+
+async function changeMrWhitePlayers() {
+  if (mrWhiteState && mrWhiteState.phase !== "finished" && !confirm("Arrêter cette partie et modifier les joueurs ?")) return;
+  const names = mrWhiteState ? [...mrWhiteState.players].sort((left, right) => left.id - right.id).map((player) => player.name) : [];
+
+  try {
+    await api("/api/mr-white", { method: "DELETE" });
+    mrWhiteState = null;
+    mrWhitePlayerCount.value = String(Math.min(10, Math.max(3, names.length || 5)));
+    renderMrWhitePlayerFields(names);
+    mrWhiteLobby.hidden = false;
+    mrWhiteGame.hidden = true;
+  } catch (_error) {
+    mrWhiteStatus.textContent = "Impossible d’arrêter la partie.";
+  }
+}
+
 function permissionsFromForm(form) {
   return Array.from(form.querySelectorAll("input[name='permissions']:checked")).map((input) => input.value);
 }
@@ -1084,7 +1349,7 @@ menuToggle.addEventListener("click", () => {
   menuToggle.querySelector("span").textContent = collapsed ? "›" : "‹";
 });
 
-[pokerNav, beloteNav, adminNav, accountNav].forEach((nav) => nav.addEventListener("click", () => showView(nav.dataset.view)));
+[pokerNav, beloteNav, mrWhiteNav, adminNav, accountNav].forEach((nav) => nav.addEventListener("click", () => showView(nav.dataset.view)));
 
 passwordForm.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -1137,6 +1402,11 @@ resumeBeloteButton.addEventListener("click", resumeBelote);
 leaveBeloteButton.addEventListener("click", leaveBelote);
 beloteTypeSelect.addEventListener("change", refreshBeloteSaveStatus);
 beloteLlmMode.addEventListener("change", setBeloteLlmMode);
+mrWhitePlayerCount.addEventListener("change", () => renderMrWhitePlayerFields());
+mrWhiteForm.addEventListener("submit", createMrWhite);
+mrWhiteRestart.addEventListener("click", restartMrWhite);
+mrWhiteChangePlayers.addEventListener("click", changeMrWhitePlayers);
 logoutButton.addEventListener("click", logout);
 
+renderMrWhitePlayerFields();
 restoreSession();

@@ -3,7 +3,7 @@
 * { box-sizing: border-box; }
 html, body { width: 100%; min-width: 0; }
 body { min-height: 100vh; margin: 0; color: #f8fafc; background: radial-gradient(circle at 10% 10%, #2c1b58, transparent 35rem), radial-gradient(circle at 90% 90%, #0a4e50, transparent 32rem), #0b1020; }
-button, input { font: inherit; }
+button, input, select { font: inherit; }
 button { cursor: pointer; }
 [hidden] { display: none !important; }
 .app-shell { display: grid; width: 100%; min-height: 100vh; min-height: 100dvh; place-items: center; padding: clamp(1rem, 5vw, 1.5rem); }
@@ -202,6 +202,44 @@ button:disabled { cursor: wait; opacity: .65; }
 .belote-choice { min-width: 3.2rem; min-height: 2.45rem; padding: .45rem .65rem; border: 1px solid #7dd3fc55; border-radius: .55rem; color: #e0f2fe; background: #0f2f3bcc; font-weight: 800; }
 .belote-choice:hover, .belote-choice.selected { color: #042f2e; border-color: #99f6e4; background: #5eead4; }
 .belote-next-deal { min-width: 11rem; color: #052e16; border-color: #86efac; background: #86efac; }
+
+/* Mr. White privilégie une seule action lisible quand le téléphone change de main. */
+.mr-white-form { max-width: 36rem; margin-top: 1.5rem; }
+.mr-white-form > select { min-height: 3rem; margin-bottom: .8rem; padding: .75rem; border: 1px solid #ffffff29; border-radius: .65rem; color: #f8fafc; background: #080c18; }
+.mr-white-player-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 .8rem; }
+.mr-white-player-fields label { display: grid; min-width: 0; gap: .45rem; }
+.mr-white-game { margin-top: 2rem; }
+.mr-white-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; }
+.mr-white-toolbar > p { margin: 0; color: #a5f3fc; font-weight: 800; }
+.mr-white-toolbar > div { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .5rem; }
+.mr-white-stage { width: min(100%, 44rem); min-height: 28rem; margin: 0 auto; padding: clamp(1.4rem, 5vw, 3rem); border: 1px solid #ffffff24; border-radius: 1.2rem; background: linear-gradient(145deg, #151b2df2, #101629e8); box-shadow: 0 1rem 3rem #0000003d; text-align: center; }
+.mr-white-stage.secret-visible { display: flex; flex-direction: column; justify-content: center; border-color: #7dd3fc88; background: radial-gradient(circle at 50% 25%, #164e6355, transparent 18rem), #101629; }
+.mr-white-main-title { font-size: clamp(1.55rem, 5vw, 2.25rem); line-height: 1.15; }
+.mr-white-instruction { margin: 1rem auto 1.5rem; color: #aab4ca; line-height: 1.55; }
+.mr-white-main-action { width: min(100%, 24rem); margin: 2rem auto 0; }
+.mr-white-secret-word { color: #bae6fd; font-size: clamp(2.4rem, 10vw, 4.5rem); line-height: 1.05; }
+.mr-white-order { margin-top: 2rem; text-align: left; }
+.mr-white-order h3, .mr-white-choice-title { margin: 0 0 .8rem; color: #aab4ca; font-size: .85rem; letter-spacing: .08em; text-transform: uppercase; }
+.mr-white-order-list { display: grid; gap: .45rem; margin: 0; padding: 0; list-style-position: inside; }
+.mr-white-order-list li { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .7rem .85rem; border-radius: .65rem; background: #ffffff0a; }
+.mr-white-order-list li::before { color: #7dd3fc; font-weight: 900; content: counter(list-item) "."; }
+.mr-white-order-list li strong { margin-right: auto; }
+.mr-white-order-list li span { color: #fca5a5; font-size: .78rem; }
+.mr-white-order-list li.eliminated { opacity: .6; }
+.mr-white-player-choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr)); gap: .6rem; }
+.mr-white-choice-title { margin-top: 2rem; }
+.mr-white-player-button { min-height: 3rem; padding: .7rem; border: 1px solid #7dd3fc55; border-radius: .65rem; color: #e0f2fe; background: #0f2f3bcc; font-weight: 800; }
+.mr-white-player-button:hover { color: #042f2e; background: #5eead4; }
+.mr-white-role { display: inline-block; margin: 1.5rem 0; padding: .65rem 1rem; border-radius: 999px; font-size: 1.15rem; }
+.role-civil { color: #bbf7d0; border-color: #86efac55; background: #14532d99; }
+.role-spy { color: #fde68a; border-color: #facc1555; background: #713f1299; }
+.role-mr_white { color: #fecaca; border-color: #fca5a555; background: #7f1d1d99; }
+.mr-white-guess-actions, .mr-white-end-actions { display: grid; grid-template-columns: 1fr 1fr; gap: .7rem; margin-top: 1.5rem; }
+.mr-white-guess-actions .primary-button, .mr-white-end-actions .primary-button { margin: 0; }
+.mr-white-final-roles { display: grid; gap: .5rem; margin-top: 1.5rem; }
+.mr-white-final-player { display: flex; justify-content: space-between; gap: 1rem; padding: .75rem .9rem; border: 1px solid transparent; border-radius: .65rem; }
+.mr-white-final-words { margin-top: 1.5rem; padding: .8rem; border-radius: .7rem; color: #dbeafe; background: #07111d99; }
+.mr-white-final-words p { margin: .35rem; }
 
 .admin-card { margin-top: 2rem; padding: clamp(1.25rem, 4vw, 2rem); border: 1px solid #ffffff1f; border-radius: .8rem; background: #151b2dd9; box-shadow: 0 1rem 3rem #00000033; }
 .admin-form { margin-top: 1rem; }

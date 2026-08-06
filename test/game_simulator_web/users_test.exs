@@ -30,6 +30,7 @@ defmodule GameSimulatorWeb.UsersTest do
   end
 
   test "validates permissions against the allowlist" do
+    assert :ok = Users.add("player", "a-long-test-password", ["mr_white"])
     assert {:error, :invalid_permissions} = Users.add("alice", "a-long-test-password", ["poker", "root"])
     assert {:error, :not_found} = Users.get("alice")
   end

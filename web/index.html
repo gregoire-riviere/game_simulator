@@ -43,6 +43,10 @@
               <span aria-hidden="true">♣</span>
               <span class="nav-link-text">Belote</span>
             </button>
+            <button id="mr-white-nav" class="nav-link" type="button" title="Mr. White" data-view="mr-white">
+              <span aria-hidden="true">◎</span>
+              <span class="nav-link-text">Mr. White</span>
+            </button>
             <p id="admin-nav-label" class="nav-section-label" hidden>Administration</p>
             <button id="admin-nav" class="nav-link" type="button" title="Utilisateurs" data-view="admin" hidden>
               <span aria-hidden="true">⚙</span>
@@ -206,6 +210,48 @@
           </section>
         </section>
 
+        <section id="mr-white-page" class="poker-page content-page" hidden aria-labelledby="mr-white-title">
+          <header class="poker-header">
+            <div class="page-heading">
+              <p class="eyebrow">Jeu de groupe</p>
+              <h1 id="mr-white-title">Mr. White</h1>
+              <p class="intro">Un seul téléphone, des mots presque identiques et deux infiltrés à démasquer.</p>
+            </div>
+          </header>
+
+          <section id="mr-white-lobby" class="new-game-card" aria-labelledby="mr-white-setup-title">
+            <h2 id="mr-white-setup-title">Préparer la partie</h2>
+            <p>Choisissez de 3 à 10 joueurs. Il y aura un espion et un Mr. White.</p>
+            <form id="mr-white-form" class="mr-white-form">
+              <label for="mr-white-player-count">Nombre de joueurs</label>
+              <select id="mr-white-player-count">
+                <option value="3">3 joueurs</option>
+                <option value="4">4 joueurs</option>
+                <option value="5" selected>5 joueurs</option>
+                <option value="6">6 joueurs</option>
+                <option value="7">7 joueurs</option>
+                <option value="8">8 joueurs</option>
+                <option value="9">9 joueurs</option>
+                <option value="10">10 joueurs</option>
+              </select>
+              <div id="mr-white-player-fields" class="mr-white-player-fields"></div>
+              <button class="primary-button" type="submit">Lancer la partie <span aria-hidden="true">→</span></button>
+            </form>
+            <p id="mr-white-status" class="form-status" role="status" aria-live="polite"></p>
+          </section>
+
+          <section id="mr-white-game" class="mr-white-game" hidden aria-label="Partie de Mr. White">
+            <div class="mr-white-toolbar">
+              <p id="mr-white-round">Partie en cours</p>
+              <div>
+                <button id="mr-white-restart" class="leave-table-button" type="button">Recommencer</button>
+                <button id="mr-white-change-players" class="leave-table-button" type="button">Changer les joueurs</button>
+              </div>
+            </div>
+            <section id="mr-white-stage" class="mr-white-stage" aria-live="polite"></section>
+          </section>
+        </section>
+
         <section id="admin-page" class="poker-page content-page" hidden aria-labelledby="admin-title">
           <header class="poker-header">
             <div class="page-heading">
@@ -227,6 +273,7 @@
                 <label><input name="permissions" type="checkbox" value="admin" /> Admin</label>
                 <label><input name="permissions" type="checkbox" value="poker" checked /> Poker</label>
                 <label><input name="permissions" type="checkbox" value="belote" /> Belote</label>
+                <label><input name="permissions" type="checkbox" value="mr_white" /> Mr. White</label>
                 <label><input name="permissions" type="checkbox" value="llm" /> LLM</label>
               </fieldset>
               <button class="primary-button" type="submit">Créer <span aria-hidden="true">→</span></button>
