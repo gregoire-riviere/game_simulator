@@ -92,6 +92,7 @@ let tableRetryTimer = null;
 let tableRetrySeconds = 0;
 let actionPending = false;
 let mrWhiteState = null;
+let previousScrollY = window.scrollY;
 
 function hasPermission(permission) {
   return session && Array.isArray(session.permissions) && session.permissions.includes(permission);
@@ -1381,11 +1382,22 @@ loginForm.addEventListener("submit", async (event) => {
   }
 });
 
-menuToggle.addEventListener("click", () => {
-  const collapsed = dashboard.classList.toggle("menu-collapsed");
+function setMenuCollapsed(collapsed) {
+  dashboard.classList.toggle("menu-collapsed", collapsed);
   menuToggle.setAttribute("aria-expanded", String(!collapsed));
+  menuToggle.setAttribute("aria-label", collapsed ? "Déplier le menu" : "Réduire le menu");
   menuToggle.querySelector("span").textContent = collapsed ? "›" : "‹";
+}
+
+menuToggle.addEventListener("click", () => {
+  setMenuCollapsed(!dashboard.classList.contains("menu-collapsed"));
 });
+
+window.addEventListener("scroll", () => {
+  const scrollY = window.scrollY;
+  if (!dashboard.hidden && window.matchMedia("(max-width: 700px)").matches && scrollY > previousScrollY) setMenuCollapsed(true);
+  previousScrollY = scrollY;
+}, { passive: true });
 
 [pokerNav, beloteNav, mrWhiteNav, adminNav, accountNav].forEach((nav) => nav.addEventListener("click", () => showView(nav.dataset.view)));
 
