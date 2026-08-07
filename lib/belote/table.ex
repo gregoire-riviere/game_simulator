@@ -24,7 +24,7 @@ defmodule Belote.Table do
 
     state =
       case Keyword.get(options, :snapshot) do
-        %{owner: ^owner, game: game} = snapshot -> %{owner: owner, game_key: game_key, game: game, bot_names: Map.get(snapshot, :bot_names, default_bot_names()), llm_mode: Map.get(snapshot, :llm_mode, :local), llm_remaining: Map.get(snapshot, :llm_remaining, 10), saving?: false}
+        %{owner: ^owner, game: game} = snapshot -> %{owner: owner, game_key: game_key, game: Game.new(game), bot_names: Map.get(snapshot, :bot_names, default_bot_names()), llm_mode: Map.get(snapshot, :llm_mode, :local), llm_remaining: Map.get(snapshot, :llm_remaining, 10), saving?: false}
         nil -> %{owner: owner, game_key: game_key, game: Game.new(variant(game_key), Keyword.get(options, :target_score, 1000)), bot_names: random_bot_names(), llm_mode: Keyword.get(options, :llm_mode, :local), llm_remaining: 10, saving?: false}
       end
 

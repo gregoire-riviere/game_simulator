@@ -13,6 +13,32 @@ defmodule Belote.GameTest do
     assert Enum.count(Enum.flat_map(state.hands, fn {_seat, cards} -> cards end)) == 32
   end
 
+  test "coinche deal gives eight cards to every player after bidding" do
+    state = Game.new(:coinche, 1000)
+    {:ok, state} = Game.act(state, state.turn, {:bid, 80, :hearts})
+    {:ok, state} = Game.act(state, state.turn, :pass)
+    {:ok, state} = Game.act(state, state.turn, :pass)
+    {:ok, state} = Game.act(state, state.turn, :pass)
+
+    assert state.phase == :playing
+    assert Enum.all?(state.hands, fn {_seat, cards} -> length(cards) == 8 end)
+    assert Enum.count(Enum.flat_map(state.hands, fn {_seat, cards} -> cards end)) == 32
+  end
+
+  test "restoring an affected coinche save returns the missing card to the human" do
+    state = Game.new(:coinche, 1000)
+    {:ok, state} = Game.act(state, state.turn, {:bid, 80, :hearts})
+    {:ok, state} = Game.act(state, state.turn, :pass)
+    {:ok, state} = Game.act(state, state.turn, :pass)
+    {:ok, state} = Game.act(state, state.turn, :pass)
+    [_missing | short_hand] = state.hands[4]
+
+    restored = Game.new(put_in(state, [:hands, 4], short_hand))
+
+    assert length(restored.hands[4]) == 8
+    assert Enum.count(Enum.flat_map(restored.hands, fn {_seat, cards} -> cards end)) == 32
+  end
+
   test "a player must follow suit when possible" do
     state = %{
       Game.new(:classic, 1000)

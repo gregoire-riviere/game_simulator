@@ -13,19 +13,33 @@ defmodule Belote.Game do
     new_deal(%{variant: variant, target_score: target_score, dealer: 4, scores: %{0 => 0, 1 => 0}, deal_number: 0, deal_history: [], match_winner: nil})
   end
 
+  def new(%{variant: :coinche, phase: :playing} = state) do
+    played_cards = for %{action: {:play, card}} <- state.history, do: card
+    played_counts = Enum.frequencies(for %{seat: seat, action: {:play, _card}} <- state.history, do: seat)
+    card_totals = Map.new(1..4, fn seat -> {seat, length(state.hands[seat]) + Map.get(played_counts, seat, 0)} end)
+    missing_cards = deck() -- (Enum.flat_map(state.hands, fn {_seat, cards} -> cards end) ++ played_cards)
+
+    # Les anciennes sauvegardes de Coinche ont pu distribuer seulement 31 cartes.
+    if card_totals == %{1 => 8, 2 => 8, 3 => 8, 4 => 7} and length(missing_cards) == 1 do
+      put_in(state, [:hands, 4], state.hands[4] ++ missing_cards)
+    else
+      state
+    end
+  end
+
   def new(state), do: state
 
   def new_deal(state) do
     dealer = next_seat(Map.get(state, :dealer, 4))
     deck = Enum.shuffle(deck())
     {hands, rest} = deal(deck, 5)
-    turned_card = hd(rest)
+    {turned_card, remaining_deck} = if state.variant == :classic, do: {hd(rest), tl(rest)}, else: {nil, rest}
     phase = if state.variant == :classic, do: :classic_first, else: :coinche_bidding
 
     Map.merge(state, %{
       dealer: dealer,
       hands: hands,
-      deck: tl(rest),
+      deck: remaining_deck,
       turned_card: turned_card,
       turn: next_seat(dealer),
       phase: phase,
