@@ -21,6 +21,17 @@ defmodule MrWhite.GameTest do
     assert {:ok, %{name: "Alice", role: :mr_white, word: nil}} = MrWhite.Game.secret(game)
   end
 
+  test "lets an active player review their word during the vote" do
+    {:ok, game} = game([:mr_white, :spy, :civil, :civil])
+    assert {:error, :invalid_phase} = MrWhite.Game.review_secret(game, 3)
+    game = finish_reveals(game)
+
+    assert {:ok, %{name: "Chloé", role: nil, word: "train"}} = MrWhite.Game.review_secret(game, 3)
+    assert {:ok, game} = MrWhite.Game.act(game, {:eliminate, 3})
+    assert {:ok, game} = MrWhite.Game.act(game, :next_round)
+    assert {:error, :invalid_player} = MrWhite.Game.review_secret(game, 3)
+  end
+
   test "ends as soon as both infiltrators are eliminated" do
     {:ok, game} = game([:civil, :mr_white, :spy, :civil, :civil])
     game = finish_reveals(game)

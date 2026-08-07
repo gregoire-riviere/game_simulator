@@ -306,6 +306,18 @@ defmodule GameSimulatorWeb.Endpoint do
     end)
   end
 
+  post "/api/mr-white/review-secret" do
+    authenticated(conn, "mr_white", fn conn, account ->
+      with {:ok, table} <- mr_white_table_for(account.username),
+           {:ok, player_id} <- parse_mr_white_player_id(conn.body_params["player_id"]),
+           {:ok, secret} <- MrWhite.Table.review_secret(table, account.username, player_id) do
+        send_json(conn, 200, secret)
+      else
+        {:error, reason} -> table_error(conn, reason)
+      end
+    end)
+  end
+
   post "/api/mr-white/action" do
     authenticated(conn, "mr_white", fn conn, account ->
       with {:ok, table} <- mr_white_table_for(account.username),
@@ -623,6 +635,8 @@ defmodule GameSimulatorWeb.Endpoint do
   def parse_mr_white_action(%{"action" => "eliminate", "player_id" => id}) when is_integer(id), do: {:ok, {:eliminate, id}}
   def parse_mr_white_action(%{"action" => "mr_white_guess", "accepted" => accepted}) when is_boolean(accepted), do: {:ok, {:mr_white_guess, accepted}}
   def parse_mr_white_action(_params), do: {:error, :invalid_action}
+  def parse_mr_white_player_id(id) when is_integer(id), do: {:ok, id}
+  def parse_mr_white_player_id(_id), do: {:error, :invalid_player}
 
   def parse_llm_mode("llm"), do: {:ok, :llm}
   def parse_llm_mode("shadow"), do: {:ok, :shadow}

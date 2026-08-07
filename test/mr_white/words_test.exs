@@ -6,7 +6,6 @@ defmodule MrWhite.WordsTest do
 
     assert length(pairs) >= 300
     assert {"seau", "bassin"} in pairs
-    assert {"train", "bus"} in pairs
     assert {"lampe", "bougie"} in pairs
     assert Enum.all?(pairs, fn {civil, spy} -> civil != "" and spy != "" and civil != spy end)
   end

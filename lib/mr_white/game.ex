@@ -82,9 +82,22 @@ defmodule MrWhite.Game do
 
   def secret(state) do
     with {:ok, player} <- current_reveal_player(state) do
-      word = if player.role == :civil, do: state.civilian_word, else: if(player.role == :spy, do: state.spy_word, else: nil)
-      {:ok, %{player_id: player.id, name: player.name, role: if(player.role == :mr_white, do: :mr_white, else: nil), word: word}}
+      {:ok, player_secret(player, state)}
     end
+  end
+
+  def review_secret(%{phase: :vote} = state, id) when is_integer(id) do
+    case Enum.find(state.players, &(&1.id == id and &1.active)) do
+      nil -> {:error, :invalid_player}
+      player -> {:ok, player_secret(player, state)}
+    end
+  end
+
+  def review_secret(_state, _id), do: {:error, :invalid_phase}
+
+  def player_secret(player, state) do
+    word = if player.role == :civil, do: state.civilian_word, else: if(player.role == :spy, do: state.spy_word, else: nil)
+    %{player_id: player.id, name: player.name, role: if(player.role == :mr_white, do: :mr_white, else: nil), word: word}
   end
 
   def act(%{phase: :reveal} = state, :confirm_reveal) do

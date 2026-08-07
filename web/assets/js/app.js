@@ -1009,6 +1009,7 @@ function renderMrWhite(nextState) {
   mrWhiteLobby.hidden = true;
   mrWhiteGame.hidden = false;
   mrWhiteRound.textContent = nextState.phase === "reveal" ? "Distribution des mots" : `Tour ${nextState.round}`;
+  mrWhiteStage.classList.remove("secret-visible");
   mrWhiteStage.replaceChildren();
 
   if (nextState.phase === "reveal") renderMrWhiteReveal(nextState);
@@ -1030,27 +1031,31 @@ function renderMrWhiteReveal(state) {
 async function revealMrWhiteSecret() {
   try {
     const secret = await api("/api/mr-white/secret", { method: "POST", body: "{}" });
-    mrWhiteStage.replaceChildren();
-    mrWhiteStage.classList.add("secret-visible");
-
-    if (secret.role === "mr_white") {
-      mrWhiteStage.append(
-        mrWhiteNode("p", "eyebrow", secret.name),
-        mrWhiteNode("h2", "mr-white-secret-word", "Vous êtes Mr. White"),
-        mrWhiteNode("p", "mr-white-instruction", "Vous n’avez aucun mot. Écoutez bien les autres et improvisez.")
-      );
-    } else {
-      mrWhiteStage.append(
-        mrWhiteNode("p", "eyebrow", secret.name),
-        mrWhiteNode("p", "mr-white-instruction", "Votre mot secret est"),
-        mrWhiteNode("h2", "mr-white-secret-word", secret.word)
-      );
-    }
-
-    mrWhiteStage.append(mrWhiteButton("J’ai mémorisé · masquer", "primary-button mr-white-main-action", confirmMrWhiteReveal));
+    showMrWhiteSecret(secret, "J’ai mémorisé · masquer", confirmMrWhiteReveal);
   } catch (_error) {
     mrWhiteStatus.textContent = "Impossible d’afficher le mot.";
   }
+}
+
+function showMrWhiteSecret(secret, buttonLabel, click) {
+  mrWhiteStage.replaceChildren();
+  mrWhiteStage.classList.add("secret-visible");
+
+  if (secret.role === "mr_white") {
+    mrWhiteStage.append(
+      mrWhiteNode("p", "eyebrow", secret.name),
+      mrWhiteNode("h2", "mr-white-secret-word", "Vous êtes Mr. White"),
+      mrWhiteNode("p", "mr-white-instruction", "Vous n’avez aucun mot. Écoutez bien les autres et improvisez.")
+    );
+  } else {
+    mrWhiteStage.append(
+      mrWhiteNode("p", "eyebrow", secret.name),
+      mrWhiteNode("p", "mr-white-instruction", "Votre mot secret est"),
+      mrWhiteNode("h2", "mr-white-secret-word", secret.word)
+    );
+  }
+
+  mrWhiteStage.append(mrWhiteButton(buttonLabel, "primary-button mr-white-main-action", click));
 }
 
 async function confirmMrWhiteReveal() {
@@ -1064,6 +1069,7 @@ function renderMrWhiteVote(state) {
     mrWhiteNode("h2", "mr-white-main-title", "Décrivez votre mot, puis éliminez un joueur"),
     renderMrWhiteOrder(state)
   );
+  mrWhiteStage.append(mrWhiteButton("Revoir mon mot", "leave-table-button mr-white-review-button", () => renderMrWhiteReviewChoice(state)));
 
   const choices = mrWhiteNode("div", "mr-white-player-choices");
   mrWhiteOrderedPlayers(state).filter((player) => player.active).forEach((player) => {
@@ -1072,6 +1078,38 @@ function renderMrWhiteVote(state) {
     }));
   });
   mrWhiteStage.append(mrWhiteNode("h3", "mr-white-choice-title", "Qui est éliminé ?"), choices);
+}
+
+function renderMrWhiteReviewChoice(state) {
+  mrWhiteStage.replaceChildren(
+    mrWhiteNode("p", "eyebrow", "Rappel privé"),
+    mrWhiteNode("h2", "mr-white-main-title", "Qui veut revoir son mot ?"),
+    mrWhiteNode("p", "mr-white-instruction", "Choisissez le joueur, puis passez-lui le téléphone.")
+  );
+  const choices = mrWhiteNode("div", "mr-white-player-choices");
+  mrWhiteOrderedPlayers(state).filter((player) => player.active).forEach((player) => {
+    choices.append(mrWhiteButton(player.name, "mr-white-player-button", () => prepareMrWhiteReview(player)));
+  });
+  mrWhiteStage.append(choices, mrWhiteButton("Retour au vote", "leave-table-button mr-white-review-button", () => renderMrWhite(state)));
+}
+
+function prepareMrWhiteReview(player) {
+  mrWhiteStage.replaceChildren(
+    mrWhiteNode("p", "eyebrow", "Rappel privé"),
+    mrWhiteNode("h2", "mr-white-main-title", `Passez le téléphone à ${player.name}`),
+    mrWhiteNode("p", "mr-white-instruction", "Personne d’autre ne doit regarder l’écran."),
+    mrWhiteButton("Revoir mon mot", "primary-button mr-white-main-action", () => revealMrWhiteReview(player.id)),
+    mrWhiteButton("Annuler", "leave-table-button mr-white-review-button", () => renderMrWhite(mrWhiteState))
+  );
+}
+
+async function revealMrWhiteReview(playerId) {
+  try {
+    const secret = await api("/api/mr-white/review-secret", { method: "POST", body: JSON.stringify({ player_id: playerId }) });
+    showMrWhiteSecret(secret, "Masquer et revenir au vote", () => renderMrWhite(mrWhiteState));
+  } catch (_error) {
+    renderMrWhite(mrWhiteState);
+  }
 }
 
 function renderMrWhiteElimination(state) {

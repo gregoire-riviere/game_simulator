@@ -252,6 +252,24 @@ defmodule GameSimulatorWeb.EndpointTest do
     assert %{"player_id" => player_id, "name" => name} = Poison.decode!(secret.resp_body)
     assert player_id == reveal_player["id"]
     assert name == reveal_player["name"]
+
+    Enum.each(1..4, fn _player ->
+      confirmed =
+        conn(:post, "/api/mr-white/action", %{action: "confirm_reveal"})
+        |> put_req_header("authorization", "Bearer #{token}")
+        |> then(&Endpoint.call(&1, Endpoint.init([])))
+
+      assert confirmed.status == 200
+    end)
+
+    review =
+      conn(:post, "/api/mr-white/review-secret", %{player_id: player_id})
+      |> put_req_header("authorization", "Bearer #{token}")
+      |> then(&Endpoint.call(&1, Endpoint.init([])))
+
+    assert review.status == 200
+    assert %{"name" => ^name, "role" => nil, "word" => word} = Poison.decode!(review.resp_body)
+    assert is_binary(word)
   end
 
   test "reports save status and resumes a saved table" do

@@ -217,6 +217,7 @@ button:disabled { cursor: wait; opacity: .65; }
 .mr-white-main-title { font-size: clamp(1.55rem, 5vw, 2.25rem); line-height: 1.15; }
 .mr-white-instruction { margin: 1rem auto 1.5rem; color: #aab4ca; line-height: 1.55; }
 .mr-white-main-action { width: min(100%, 24rem); margin: 2rem auto 0; }
+.mr-white-review-button { display: block; width: fit-content; margin: 1rem auto 0; }
 .mr-white-secret-word { color: #bae6fd; font-size: clamp(2.4rem, 10vw, 4.5rem); line-height: 1.05; }
 .mr-white-order { margin-top: 2rem; text-align: left; }
 .mr-white-order h3, .mr-white-choice-title { margin: 0 0 .8rem; color: #aab4ca; font-size: .85rem; letter-spacing: .08em; text-transform: uppercase; }

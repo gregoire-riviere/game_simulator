@@ -16,6 +16,7 @@ defmodule MrWhite.Table do
 
   def state(table, owner), do: GenServer.call(table, {:state, owner})
   def secret(table, owner), do: GenServer.call(table, {:secret, owner})
+  def review_secret(table, owner, player_id), do: GenServer.call(table, {:review_secret, owner, player_id})
   def act(table, owner, action), do: GenServer.call(table, {:act, owner, action})
   def restart(table, owner), do: GenServer.call(table, {:restart, owner})
 
@@ -34,6 +35,10 @@ defmodule MrWhite.Table do
 
   def handle_call({:secret, owner}, _from, state) do
     reply_if_owner(state, owner, fn game -> MrWhite.Game.secret(game) end)
+  end
+
+  def handle_call({:review_secret, owner, player_id}, _from, state) do
+    reply_if_owner(state, owner, fn game -> MrWhite.Game.review_secret(game, player_id) end)
   end
 
   def handle_call({:act, owner, action}, _from, state) do
