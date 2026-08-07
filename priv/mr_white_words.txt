@@ -404,3 +404,303 @@ jus d'orange|limonade
 cabane|tipi
 patins à glace|skis
 patinoire|piste de ski
+glace|esquimau
+fraise|cerise
+framboise|mûre
+clémentine|mandarine
+noisette|châtaigne
+pistache|cacahuète
+compote|purée
+gaufre|pancake
+donut|muffin
+crumble|tarte
+mayonnaise|ketchup
+vinaigre|citron
+brocoli|chou-fleur
+haricot|lentille
+maïs|blé
+ravioli|lasagne
+brochette|grillade
+nuggets|poisson pané
+nouilles|spaghetti
+purée|frites
+soupe|gazpacho
+chocolat au lait|chocolat noir
+chamallow|carambar
+caramel|fudge
+bonbon gélifié|sucette
+sorbet|granité
+jus de pomme|jus d'orange
+lait au chocolat|milkshake
+eau gazeuse|eau plate
+thé glacé|limonade
+paella|couscous
+taco|burrito
+hot-dog|hamburger
+croque-monsieur|sandwich
+quiche|pizza
+baguette|pain de mie
+brioche|pain au lait
+churro|donut
+crêpe|pancake
+gâteau au chocolat|brownie
+meringue|macaron
+chantilly|crème fraîche
+beurre|huile
+confiture|miel
+raisin sec|pruneau
+caméléon|iguane
+crocodile|alligator
+dauphin|baleine
+requin|espadon
+crabe|homard
+crevette|langoustine
+hibou|faucon
+perruche|canari
+toucan|perroquet
+autruche|émou
+pingouin|manchot
+castor|loutre
+blaireau|putois
+renard|loup
+hyène|chacal
+guépard|jaguar
+panthère|léopard
+panda|ours
+koala|paresseux
+kangourou|wallaby
+hérisson|porc-épic
+taupe|campagnol
+écureuil|marmotte
+cerf|chevreuil
+taureau|bison
+dromadaire|chameau
+lama|alpaga
+poney|âne
+dindon|coq
+poussin|caneton
+mouche|moustique
+coccinelle|libellule
+sauterelle|mante religieuse
+chenille|ver de terre
+escargot|coquillage
+pieuvre|seiche
+hippocampe|poisson-clown
+raie|requin
+espadon|thon
+grenouille|têtard
+réveil|horloge
+calendrier|agenda
+dictionnaire|encyclopédie
+cahier|classeur
+trousse|cartable
+stylo plume|stylo bille
+crayon de couleur|feutre
+pinceau|palette
+tube de colle|pistolet à colle
+ciseaux|massicot
+taille-crayon|gomme
+règle|rapporteur
+compas|équerre
+loupe|microscope
+jumelles|télescope
+classeur|chemise à rabats
+agrafeuse|trombone
+punaise|aimant
+bloc-notes|post-it
+doudou|peluche
+veilleuse|lampe de chevet
+couette|couverture
+oreiller|traversin
+matelas|sommier
+armoire|penderie
+étagère|casier
+pouf|coussin géant
+tapis|paillasson
+volet|store
+vitrage|miroir
+interphone|sonnette
+serrure|verrou
+poignée|loquet
+radiateur|poêle
+climatiseur|ventilateur
+aspirateur|balai
+serpillère|éponge
+seau|bassine
+poubelle|bac de recyclage
+penderie|cintre
+portemanteau|patère
+étendoir|sèche-linge
+fer à repasser|défroisseur
+lave-linge|lave-vaisselle
+évier|lavabo
+robinet|mitigeur
+casserole|faitout
+poêle|sauteuse
+miche|boule de pain
+saladier|bol
+plat|plateau
+couteau à pain|couteau de cuisine
+louche|écumoire
+fouet|spatule
+rouleau à pâtisserie|moule
+râpe|éplucheur
+presse-agrume|centrifugeuse
+mixeur|blender
+grille-pain|four
+bouilloire|théière
+trottinette électrique|draisienne
+skateboard|longboard
+patins à roulettes|rollers
+vélo de course|VTT
+scooter|moto
+quad|buggy
+voiture électrique|voiture à essence
+tracteur|remorque
+camion benne|camion citerne
+bus de ville|car scolaire
+tramway|RER
+TGV|TER
+monorail|funiculaire
+téléphérique|télésiège
+montgolfière|dirigeable
+avion de chasse|avion de ligne
+hélicoptère|drone
+voilier|catamaran
+jet-ski|bateau à moteur
+kayak|canoë
+pédalo|barque
+sous-marin|bathyscaphe
+péniche|cargo
+paquebot|ferry
+cerf-volant|planeur
+cabane|chalet
+château de sable|pâté de sable
+phare|balise
+digue|jetée
+port|marina
+pont suspendu|passerelle
+tunnel|viaduc
+piste de ski|piste de patinage
+belvédère|observatoire
+labyrinthe|jardin
+serre|véranda
+potager|verger
+composteur|bac à fleurs
+arrosage automatique|tuyau d'arrosage
+tondeuse|débroussailleuse
+sécateur|cisaille
+râteau|balai à feuilles
+pelle|bêche
+pioche|masse
+marteau|tournevis
+doudoune|anorak
+imperméable|k-way
+poncho|cape
+pull à capuche|sweat
+gilet|cardigan
+chemise|polo
+t-shirt|débardeur
+jean|survêtement
+short|pantacourt
+maillot de bain|short de bain
+maillot une pièce|bikini
+robe|salopette
+pyjama|combinaison
+chaussettes|socquettes
+bottes de pluie|baskets
+chaussons|espadrilles
+sandales|claquettes
+tongs|mules
+casquette|bob
+bonnet|cagoule
+écharpe|snood
+gants|moufles
+ceinture|bretelles
+sac banane|sac à main
+cartable|sac à dos
+trousse|pochette
+valise|sac de sport
+montre|chronomètre
+lunettes de vue|lunettes de soleil
+masque de plongée|lunettes de natation
+casque audio|écouteurs sans fil
+console portable|console de salon
+manette|joystick
+tablette|liseuse
+smartphone|talkie-walkie
+pile AA|batterie externe
+câble USB|rallonge
+webcam|caméra de sport
+clé USB|disque dur
+carte SD|clé USB
+Monopoly|Bonne Paye
+Uno|jeu de cartes
+dominos|triominos
+mikado|jenga
+puzzle|rubik's cube
+LEGO|Playmobil
+pâte à modeler|slime
+billes|calots
+yo-yo|diabolo
+cerf-volant|boomerang
+corde à sauter|élastique
+marelle|cache-cache
+ballon de foot|ballon de basket
+raquette de tennis|raquette de ping-pong
+volant de badminton|balle de tennis
+frisbee|balle
+rollers|trottinette
+patins à glace|skis
+luge|bobsleigh
+toboggan|balançoire
+trampoline|château gonflable
+manège|grand huit
+maison hantée|palais des glaces
+cirque|fête foraine
+zoo|aquarium
+musée|planétarium
+cinéma|théâtre
+piscine|parc aquatique
+bowling|laser game
+escape game|chasse au trésor
+magicien|ventriloque
+clown|jongleur
+mime|comédien
+chanteur|danseur
+peintre|sculpture
+auteur|illustrateur
+vétérinaire|soigneur
+pompier|policier
+médecin|infirmier
+dentiste|orthodontiste
+maître|professeur
+astronaute|pilote
+cuisinier|boulanger
+jardinier|agriculteur
+détective|espion
+pirate|corsaire
+chevalier|samouraï
+ninja|agent secret
+super-héros|détective
+princesse|fée
+sorcier|lutin
+gnome|elfe
+dragon|dinosaure
+licorne|pégase
+sirène|triton
+volcan|geyser
+iceberg|glacier
+île|atoll
+désert|dune
+grotte|gouffre
+rivière|fleuve
+cascade|jet d'eau
+marée|vague
+tsunami|tempête
+arc-en-ciel|aurore boréale
+nuage|brouillard
+grêle|neige
+éclipse|pleine lune
+comète|étoile filante
+constellation|galaxie
