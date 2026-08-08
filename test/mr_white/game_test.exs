@@ -1,24 +1,33 @@
 defmodule MrWhite.GameTest do
   use ExUnit.Case, async: true
 
-  test "creates one role of each infiltrator and never starts with Mr. White" do
-    assert {:ok, game} =
-             MrWhite.Game.new(["Alice", "Bob", "Chloé", "David"],
-               word_pair: {"train", "bus"},
-               roles: [:mr_white, :spy, :civil, :civil],
-               order: [1, 2, 3, 4]
-             )
+  test "creates one role of each infiltrator and spreads Mr. White after the first position" do
+    games =
+      Enum.map(1..100, fn _ ->
+        {:ok, game} =
+          MrWhite.Game.new(["Alice", "Bob", "Chloé", "David"],
+            word_pair: {"train", "bus"},
+            roles: [:mr_white, :spy, :civil, :civil],
+            order: [1, 2, 3, 4]
+          )
 
-    assert game.order == [2, 1, 3, 4]
+        game
+      end)
+
+    game = hd(games)
+    positions = Enum.map(games, fn game -> Enum.find_index(game.order, &(&1 == 1)) + 1 end)
+
+    assert 1 not in positions
+    assert Enum.sort(Enum.uniq(positions)) == [2, 3, 4]
     assert Enum.frequencies_by(game.players, & &1.role) == %{civil: 2, mr_white: 1, spy: 1}
   end
 
   test "only reveals the current word and does not identify the spy" do
-    {:ok, game} = game([:mr_white, :spy, :civil, :civil])
-    assert {:ok, %{name: "Bob", role: nil, word: "bus"}} = MrWhite.Game.secret(game)
+    {:ok, game} = game([:spy, :mr_white, :civil, :civil])
+    assert {:ok, %{name: "Alice", role: nil, word: "bus"}} = MrWhite.Game.secret(game)
 
     assert {:ok, game} = MrWhite.Game.act(game, :confirm_reveal)
-    assert {:ok, %{name: "Alice", role: :mr_white, word: nil}} = MrWhite.Game.secret(game)
+    assert {:ok, %{name: "Bob", role: :mr_white, word: nil}} = MrWhite.Game.secret(game)
   end
 
   test "lets an active player review their word during the vote" do

@@ -66,8 +66,7 @@ defmodule MrWhite.Game do
 
   def move_mr_white_from_first([first | rest] = order, players) do
     if player(first, players).role == :mr_white do
-      [replacement | remaining] = rest
-      [replacement, first | remaining]
+      List.insert_at(rest, :rand.uniform(length(rest)), first)
     else
       order
     end
