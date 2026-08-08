@@ -12,6 +12,7 @@ defmodule Belote.Online do
 
   @call_timeout 15_000
   @seat_order [4, 2, 1, 3]
+  @code_alphabet String.graphemes("ABCDEFGHJKLMNPQRSTUVWXYZ23456789")
 
   def start_link(_options), do: GenServer.start_link(__MODULE__, %{}, name: __MODULE__)
   def create(user, game_key, target_score), do: GenServer.call(__MODULE__, {:create, user, game_key, target_score}, @call_timeout)
@@ -37,16 +38,25 @@ defmodule Belote.Online do
   def handle_call({:join, user, raw_code}, _from, state) do
     code = normalize_code(raw_code)
 
-    with {:ok, lobby} <- lobby(state, code),
-         :ok <- waiting?(lobby),
-         :ok <- room_available?(lobby) do
-      state = remove_user(state, user)
-      seat = Enum.find(@seat_order, &(not Map.has_key?(lobby.seats, &1)))
-      lobby = %{lobby | seats: Map.put(lobby.seats, seat, user)}
-      state = %{state | lobbies: Map.put(state.lobbies, code, lobby), users: Map.put(state.users, user, code)}
-      {:reply, {:ok, public_state(lobby, user)}, state}
+    if Map.get(state.users, user) == code do
+      with {:ok, lobby} <- lobby(state, code) do
+        {:reply, {:ok, public_state(lobby, user)}, state}
+      else
+        {:error, reason} -> {:reply, {:error, reason}, state}
+      end
     else
-      {:error, reason} -> {:reply, {:error, reason}, state}
+      state = remove_user(state, user)
+
+      with {:ok, lobby} <- lobby(state, code),
+           :ok <- waiting?(lobby),
+           :ok <- room_available?(lobby) do
+        seat = Enum.find(@seat_order, &(not Map.has_key?(lobby.seats, &1)))
+        lobby = %{lobby | seats: Map.put(lobby.seats, seat, user)}
+        state = %{state | lobbies: Map.put(state.lobbies, code, lobby), users: Map.put(state.users, user, code)}
+        {:reply, {:ok, public_state(lobby, user)}, state}
+      else
+        {:error, reason} -> {:reply, {:error, reason}, state}
+      end
     end
   end
 
@@ -63,8 +73,7 @@ defmodule Belote.Online do
          :ok <- host?(lobby, user),
          :ok <- waiting?(lobby) do
       game = Game.new(variant(lobby.game_key), lobby.target_score)
-      bot_names = bot_names(lobby.seats)
-      lobby = %{lobby | status: :playing, game: game, bot_names: bot_names} |> advance_bots()
+      lobby = %{lobby | status: :playing, game: game, bot_names: bot_names(lobby.seats)} |> advance_bots()
       state = %{state | lobbies: Map.put(state.lobbies, lobby.code, lobby)}
       {:reply, {:ok, public_state(lobby, user)}, state}
     else
@@ -99,9 +108,7 @@ defmodule Belote.Online do
     end
   end
 
-  def handle_call({:leave, user}, _from, state) do
-    {:reply, :ok, remove_user(state, user)}
-  end
+  def handle_call({:leave, user}, _from, state), do: {:reply, :ok, remove_user(state, user)}
 
   def remove_user(state, user) do
     case Map.fetch(state.users, user) do
@@ -258,15 +265,34 @@ defmodule Belote.Online do
   def variant("belote:coinche"), do: :coinche
 
   def unique_code(lobbies) do
-    code = for(_ <- 1..5, into: "", do: <<Enum.random('ABCDEFGHJKLMNPQRSTUVWXYZ23456789')>>)
+    code = 1..5 |> Enum.map(fn _index -> Enum.random(@code_alphabet) end) |> Enum.join()
     if Map.has_key?(lobbies, code), do: unique_code(lobbies), else: code
   end
 
   def normalize_code(code) when is_binary(code), do: code |> String.trim() |> String.upcase()
   def normalize_code(_code), do: ""
-  def lobby(state, code), do: case Map.fetch(state.lobbies, code) do {:ok, lobby} -> {:ok, lobby}; :error -> {:error, :lobby_not_found} end
-  def user_lobby(state, user), do: with {:ok, code} <- Map.fetch(state.users, user), do: lobby(state, code)
-  def user_seat(lobby, user), do: case Enum.find(lobby.seats, fn {_seat, username} -> username == user end) do {seat, _username} -> {:ok, seat}; nil -> {:error, :forbidden} end
+
+  def lobby(state, code) do
+    case Map.fetch(state.lobbies, code) do
+      {:ok, lobby} -> {:ok, lobby}
+      :error -> {:error, :lobby_not_found}
+    end
+  end
+
+  def user_lobby(state, user) do
+    case Map.fetch(state.users, user) do
+      {:ok, code} -> lobby(state, code)
+      :error -> {:error, :lobby_not_found}
+    end
+  end
+
+  def user_seat(lobby, user) do
+    case Enum.find(lobby.seats, fn {_seat, username} -> username == user end) do
+      {seat, _username} -> {:ok, seat}
+      nil -> {:error, :forbidden}
+    end
+  end
+
   def host?(%{host: user}, user), do: :ok
   def host?(_lobby, _user), do: {:error, :host_required}
   def waiting?(%{status: :waiting}), do: :ok
