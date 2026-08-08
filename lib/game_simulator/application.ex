@@ -34,7 +34,7 @@ defmodule GameSimulator.Application do
       table_children ++ [
         {Plug.Cowboy,
          scheme: :http,
-         plug: GameSimulatorWeb.Endpoint,
+         plug: GameSimulatorWeb.RootEndpoint,
          options: [ip: parse_ip!(host), port: port]}
       ]
     else
