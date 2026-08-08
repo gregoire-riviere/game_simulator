@@ -107,9 +107,9 @@ defmodule GameSimulator.Tables do
     end
   end
 
-  def start_new_mr_white(owner, players) do
+  def start_new_mr_white(owner, players, spy_count \\ 1) do
     stop_mr_white(owner)
-    DynamicSupervisor.start_child(GameSimulator.TableSupervisor, {MrWhite.Table, owner: owner, name: mr_white_via(owner), players: players})
+    DynamicSupervisor.start_child(GameSimulator.TableSupervisor, {MrWhite.Table, owner: owner, name: mr_white_via(owner), players: players, spy_count: spy_count})
   end
 
   def stop_mr_white(owner) do

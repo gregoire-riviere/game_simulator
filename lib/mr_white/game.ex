@@ -9,9 +9,12 @@ defmodule MrWhite.Game do
   @roles [:mr_white, :spy, :civil]
 
   def new(names, options \\ []) do
-    with {:ok, names} <- validate_names(names) do
+    spy_count = Keyword.get(options, :spy_count, 1)
+
+    with {:ok, names} <- validate_names(names),
+         :ok <- validate_spy_count(spy_count, length(names)) do
       pair = Keyword.get_lazy(options, :word_pair, &MrWhite.Words.random_pair/0)
-      roles = Keyword.get_lazy(options, :roles, fn -> Enum.shuffle([:mr_white, :spy] ++ List.duplicate(:civil, length(names) - 2)) end)
+      roles = Keyword.get_lazy(options, :roles, fn -> Enum.shuffle([:mr_white] ++ List.duplicate(:spy, spy_count) ++ List.duplicate(:civil, length(names) - spy_count - 1)) end)
       players = names |> Enum.with_index(1) |> Enum.zip(roles) |> Enum.map(fn {{name, id}, role} -> %{id: id, name: name, role: role, active: true} end)
       order = Keyword.get_lazy(options, :order, fn -> players |> Enum.map(& &1.id) |> Enum.shuffle() end)
 
@@ -22,6 +25,7 @@ defmodule MrWhite.Game do
         {:ok,
          %{
            players: players,
+           spy_count: spy_count,
            order: order,
            civilian_word: elem(pair, 0),
            spy_word: elem(pair, 1),
@@ -50,11 +54,19 @@ defmodule MrWhite.Game do
 
   def validate_names(_names), do: {:error, :invalid_players}
 
+  def validate_spy_count(spy_count, player_count) do
+    if is_integer(spy_count) and spy_count >= 1 and spy_count * 2 < player_count,
+      do: :ok,
+      else: {:error, :invalid_spy_count}
+  end
+
   def validate_roles(roles, player_count) do
     valid = length(roles) == player_count and Enum.all?(roles, &(&1 in @roles))
     counts = Enum.frequencies(roles)
 
-    if valid and counts[:mr_white] == 1 and counts[:spy] == 1 and counts[:civil] == player_count - 2,
+    spy_count = counts[:spy] || 0
+
+    if valid and counts[:mr_white] == 1 and spy_count >= 1 and spy_count * 2 < player_count and counts[:civil] == player_count - spy_count - 1,
       do: :ok,
       else: {:error, :invalid_roles}
   end
@@ -169,6 +181,7 @@ defmodule MrWhite.Game do
     %{
       phase: state.phase,
       round: state.round,
+      spy_count: state.spy_count,
       reveal_player: reveal_player_summary(state),
       players: Enum.map(state.players, &public_player(&1, state.order, finished, revealed_ids)),
       order: state.order,

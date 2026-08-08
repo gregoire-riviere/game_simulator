@@ -76,6 +76,7 @@ const mrWhiteLobby = document.getElementById("mr-white-lobby");
 const mrWhiteGame = document.getElementById("mr-white-game");
 const mrWhiteForm = document.getElementById("mr-white-form");
 const mrWhitePlayerCount = document.getElementById("mr-white-player-count");
+const mrWhiteSpyCount = document.getElementById("mr-white-spy-count");
 const mrWhitePlayerFields = document.getElementById("mr-white-player-fields");
 const mrWhiteStatus = document.getElementById("mr-white-status");
 const mrWhiteRound = document.getElementById("mr-white-round");
@@ -935,7 +936,15 @@ function mrWhiteButton(text, className, click) {
 function renderMrWhitePlayerFields(names = null) {
   const previous = names || Array.from(mrWhitePlayerFields.querySelectorAll("input")).map((input) => input.value);
   const count = Number(mrWhitePlayerCount.value);
+  const previousSpyCount = Number(mrWhiteSpyCount.value) || 1;
   mrWhitePlayerFields.replaceChildren();
+  mrWhiteSpyCount.replaceChildren();
+
+  for (let spyCount = 1; spyCount * 2 < count; spyCount += 1) {
+    const option = new Option(`${spyCount} espion${spyCount > 1 ? "s" : ""}`, spyCount);
+    option.selected = spyCount === previousSpyCount;
+    mrWhiteSpyCount.append(option);
+  }
 
   for (let index = 0; index < count; index += 1) {
     const label = mrWhiteNode("label", "", `Joueur ${index + 1}`);
@@ -972,12 +981,13 @@ async function restoreMrWhite() {
 async function createMrWhite(event) {
   event.preventDefault();
   const players = Array.from(mrWhitePlayerFields.querySelectorAll("input")).map((input) => input.value.trim());
+  const spyCount = Number(mrWhiteSpyCount.value);
   mrWhiteStatus.textContent = "";
 
   try {
-    renderMrWhite(await api("/api/mr-white", { method: "POST", body: JSON.stringify({ players }) }));
+    renderMrWhite(await api("/api/mr-white", { method: "POST", body: JSON.stringify({ players, spy_count: spyCount }) }));
   } catch (error) {
-    mrWhiteStatus.textContent = error.message === "invalid_players" ? "Utilisez de 3 à 10 noms différents, de 40 caractères maximum." : "Impossible de lancer la partie.";
+    mrWhiteStatus.textContent = error.message === "invalid_players" ? "Utilisez de 3 à 10 noms différents, de 40 caractères maximum." : error.message === "invalid_spy_count" ? "Le nombre d’espions doit être inférieur à la moitié des joueurs." : "Impossible de lancer la partie.";
   }
 }
 
@@ -1191,11 +1201,13 @@ async function restartMrWhite() {
 async function changeMrWhitePlayers() {
   if (mrWhiteState && mrWhiteState.phase !== "finished" && !confirm("Arrêter cette partie et modifier les joueurs ?")) return;
   const names = mrWhiteState ? [...mrWhiteState.players].sort((left, right) => left.id - right.id).map((player) => player.name) : [];
+  const spyCount = mrWhiteState ? mrWhiteState.spy_count : 1;
 
   try {
     await api("/api/mr-white", { method: "DELETE" });
     mrWhiteState = null;
     mrWhitePlayerCount.value = String(Math.min(10, Math.max(3, names.length || 5)));
+    mrWhiteSpyCount.value = String(spyCount);
     renderMrWhitePlayerFields(names);
     mrWhiteLobby.hidden = false;
     mrWhiteGame.hidden = true;

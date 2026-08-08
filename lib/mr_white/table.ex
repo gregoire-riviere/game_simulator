@@ -24,7 +24,7 @@ defmodule MrWhite.Table do
   def init(options) do
     owner = Keyword.fetch!(options, :owner)
 
-    case MrWhite.Game.new(Keyword.fetch!(options, :players)) do
+    case MrWhite.Game.new(Keyword.fetch!(options, :players), spy_count: Keyword.get(options, :spy_count, 1)) do
       {:ok, game} -> {:ok, %{owner: owner, game: game}}
       {:error, reason} -> {:stop, reason}
     end
@@ -55,7 +55,7 @@ defmodule MrWhite.Table do
   def handle_call({:restart, owner}, _from, state) do
     if state.owner == owner do
       names = Enum.map(state.game.players, & &1.name)
-      {:ok, game} = MrWhite.Game.new(names)
+      {:ok, game} = MrWhite.Game.new(names, spy_count: state.game.spy_count)
       {:reply, {:ok, MrWhite.Game.public_state(game)}, %{state | game: game}}
     else
       {:reply, {:error, :forbidden}, state}

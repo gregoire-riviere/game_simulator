@@ -272,7 +272,9 @@ defmodule GameSimulatorWeb.Endpoint do
   post "/api/mr-white" do
     authenticated(conn, "mr_white", fn conn, account ->
       with {:ok, players} <- MrWhite.Game.validate_names(conn.body_params["players"]),
-           {:ok, table} <- GameSimulator.Tables.start_new_mr_white(account.username, players),
+           spy_count = conn.body_params["spy_count"] || 1,
+           :ok <- MrWhite.Game.validate_spy_count(spy_count, length(players)),
+           {:ok, table} <- GameSimulator.Tables.start_new_mr_white(account.username, players, spy_count),
            {:ok, state} <- MrWhite.Table.state(table, account.username) do
         send_json(conn, 201, state)
       else

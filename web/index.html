@@ -221,7 +221,7 @@
 
           <section id="mr-white-lobby" class="new-game-card" aria-labelledby="mr-white-setup-title">
             <h2 id="mr-white-setup-title">Préparer la partie</h2>
-            <p>Choisissez de 3 à 10 joueurs. Il y aura un espion et un Mr. White.</p>
+            <p>Choisissez de 3 à 10 joueurs, le nombre d’espions et un Mr. White.</p>
             <form id="mr-white-form" class="mr-white-form">
               <label for="mr-white-player-count">Nombre de joueurs</label>
               <select id="mr-white-player-count">
@@ -234,6 +234,8 @@
                 <option value="9">9 joueurs</option>
                 <option value="10">10 joueurs</option>
               </select>
+              <label for="mr-white-spy-count">Nombre d’espions</label>
+              <select id="mr-white-spy-count"></select>
               <div id="mr-white-player-fields" class="mr-white-player-fields"></div>
               <button class="primary-button" type="submit">Lancer la partie <span aria-hidden="true">→</span></button>
             </form>
