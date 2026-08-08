@@ -21,6 +21,24 @@ defmodule MrWhite.GameTest do
     assert {:ok, %{name: "Alice", role: :mr_white, word: nil}} = MrWhite.Game.secret(game)
   end
 
+  test "creates several spies sharing the same word" do
+    assert {:ok, game} = MrWhite.Game.new(["Alice", "Bob", "Chloé", "David", "Emma"],
+      spy_count: 2,
+      word_pair: {"train", "bus"}
+    )
+
+    spies = Enum.filter(game.players, &(&1.role == :spy))
+    assert length(spies) == 2
+    assert Enum.all?(spies, &(MrWhite.Game.player_secret(&1, game).word == "bus"))
+  end
+
+  test "requires fewer spies than half of the players" do
+    names = ["Alice", "Bob", "Chloé", "David", "Emma", "Fred"]
+    assert {:ok, _game} = MrWhite.Game.new(names, spy_count: 2)
+    assert {:error, :invalid_spy_count} = MrWhite.Game.new(names, spy_count: 3)
+    assert {:error, :invalid_spy_count} = MrWhite.Game.new(names, spy_count: 0)
+  end
+
   test "lets an active player review their word during the vote" do
     {:ok, game} = game([:mr_white, :spy, :civil, :civil])
     assert {:error, :invalid_phase} = MrWhite.Game.review_secret(game, 3)

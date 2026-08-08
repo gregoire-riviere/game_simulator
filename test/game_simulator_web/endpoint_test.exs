@@ -234,13 +234,13 @@ defmodule GameSimulatorWeb.EndpointTest do
     {:ok, token, _expiration} = Auth.issue_token(user)
 
     response =
-      conn(:post, "/api/mr-white", %{players: ["Alice", "Bob", "Chloé", "David"]})
+      conn(:post, "/api/mr-white", %{players: ["Alice", "Bob", "Chloé", "David", "Emma"], spy_count: 2})
       |> put_req_header("authorization", "Bearer #{token}")
       |> then(&Endpoint.call(&1, Endpoint.init([])))
 
     assert response.status == 201
-    assert %{"phase" => "reveal", "players" => players, "reveal_player" => reveal_player} = Poison.decode!(response.resp_body)
-    assert length(players) == 4
+    assert %{"phase" => "reveal", "players" => players, "reveal_player" => reveal_player, "spy_count" => 2} = Poison.decode!(response.resp_body)
+    assert length(players) == 5
     assert Enum.all?(players, &is_nil(&1["role"]))
 
     secret =
@@ -253,7 +253,7 @@ defmodule GameSimulatorWeb.EndpointTest do
     assert player_id == reveal_player["id"]
     assert name == reveal_player["name"]
 
-    Enum.each(1..4, fn _player ->
+    Enum.each(1..5, fn _player ->
       confirmed =
         conn(:post, "/api/mr-white/action", %{action: "confirm_reveal"})
         |> put_req_header("authorization", "Bearer #{token}")
