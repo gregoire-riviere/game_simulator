@@ -24,7 +24,8 @@ defmodule GameSimulator.Application do
     # Le registre retrouve une table par utilisateur ; le superviseur isole chaque session.
     table_children = [
       {Registry, keys: :unique, name: GameSimulator.TableRegistry},
-      {DynamicSupervisor, strategy: :one_for_one, name: GameSimulator.TableSupervisor}
+      {DynamicSupervisor, strategy: :one_for_one, name: GameSimulator.TableSupervisor},
+      Belote.Online
     ]
 
     if GameSimulator.Configuration.http_server?() do
