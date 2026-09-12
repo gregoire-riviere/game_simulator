@@ -4,8 +4,8 @@ defmodule GameSimulator.BacklogFeaturesTest do
   alias Belote.{Game, Table}
 
   test "poker history screen offers the required limits and safe text rendering" do
-    html = File.read!(Path.expand("../web/index.html", File.cwd!()))
-    javascript = File.read!(Path.expand("../web/assets/js/app.js", File.cwd!()))
+    html = File.read!("web/index.html")
+    javascript = File.read!("web/assets/js/app.js")
 
     assert html =~ ~s(id="poker-history")
     assert html =~ ~s(value="10")
