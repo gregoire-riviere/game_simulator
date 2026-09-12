@@ -640,6 +640,23 @@ function renderActions() {
   // Les contrôles sont construits depuis les actions légales envoyées par le moteur.
   actionPanel.replaceChildren();
 
+  if (table.action_help) {
+    const help = document.createElement("div");
+    help.className = "action-help";
+    const message = document.createElement("span");
+    message.textContent = table.action_help.message;
+    help.append(message);
+    if (table.action_help.dismissible) {
+      const dismiss = document.createElement("button");
+      dismiss.type = "button";
+      dismiss.className = "leave-table-button";
+      dismiss.textContent = "Masquer";
+      dismiss.onclick = dismissActionHelp;
+      help.append(dismiss);
+    }
+    actionPanel.append(help);
+  }
+
   if (table.hand_finished) {
     const button = actionButton(actionMeta({ action: "next" }), null);
     button.onclick = () => nextHand();
@@ -831,6 +848,14 @@ async function nextHand() {
     renderTable(await api("/api/table/next-hand", { method: "POST", body: "{}" }));
   } catch (error) {
     tableStatus.textContent = error.message === "hero_busted" ? "Vous n’avez plus de jetons : quittez la table pour recommencer." : "Impossible de démarrer la main suivante.";
+  }
+}
+
+async function dismissActionHelp() {
+  try {
+    renderTable(await api("/api/table/action-help/dismiss", { method: "POST", body: "{}" }));
+  } catch (_error) {
+    tableStatus.textContent = "Impossible de masquer l’aide.";
   }
 }
 
