@@ -83,6 +83,6 @@ defmodule GameSimulator.ConfigurationTest do
 
     info_log = Path.join(directory, "info.log")
 
-    assert not File.exists?(info_log) or File.read!(info_log) !~ message
+    assert not File.exists?(info_log) or not (File.read!(info_log) =~ message)
   end
 end
