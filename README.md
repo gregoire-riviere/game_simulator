@@ -1,3 +1,5 @@
+[![Elixir CI](https://github.com/gregoire-riviere/game_simulator/actions/workflows/elixir.yml/badge.svg)](https://github.com/gregoire-riviere/game_simulator/actions/workflows/elixir.yml)
+
 # Game Simulator
 
 [English version](README.en.md)
