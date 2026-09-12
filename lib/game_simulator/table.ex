@@ -504,6 +504,7 @@ defmodule GameSimulator.Table do
 
   def public_state(state, owner) do
     {:ok, snapshot} = Poker.Game.public_state(state.game, state.human_id)
+    {:ok, leaderboard} = Poker.Game.session_leaderboard(state.game)
     llm_config = GameSimulator.Configuration.llm!()
     actions = if(snapshot.active_player == state.human_id, do: Poker.Game.next_action(state.game) |> elem(1) |> Map.fetch!(:actions), else: [])
 
@@ -539,6 +540,7 @@ defmodule GameSimulator.Table do
       small_blind: snapshot.small_blind,
       big_blind: snapshot.big_blind,
       players: players,
+      leaderboard: Enum.map(leaderboard, fn entry -> Map.merge(Map.drop(entry, [:player_id]), %{id: public_id(state, entry.player_id), name: player_name(state, entry.player_id)}) end),
       hero_turn: snapshot.active_player == state.human_id,
       hand_finished: snapshot.phase == :waiting,
       llm_available: llm_config.enabled,
