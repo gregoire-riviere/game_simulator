@@ -80,6 +80,9 @@ defmodule GameSimulator.ConfigurationTest do
     Logger.flush()
 
     assert File.read!(Path.join(directory, "debug.log")) =~ message
-    refute File.read!(Path.join(directory, "info.log")) =~ message
+
+    info_log = Path.join(directory, "info.log")
+
+    assert not File.exists?(info_log) or File.read!(info_log) !~ message
   end
 end
