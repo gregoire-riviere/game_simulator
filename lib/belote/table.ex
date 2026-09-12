@@ -136,6 +136,7 @@ defmodule Belote.Table do
       last_trick_points: Map.get(game, :last_trick_points, 0),
       trick_just_completed: Map.get(game, :trick_just_completed, false),
       deal_history: Enum.reverse(Map.get(game, :deal_history, [])) |> Enum.map(&public_deal(state, &1)),
+      deal_summary: public_deal_summary(state),
       actions: if(game.turn == 4, do: Enum.map(Game.legal_actions(game, 4), &public_action/1), else: []),
       last_event: game.last_event,
       match_finished: game.phase == :match_finished,
@@ -157,6 +158,27 @@ defmodule Belote.Table do
   def pass_in_phase?(entry, seat, phase), do: entry.seat == seat and entry.action == :pass and Map.get(entry, :phase) == phase
   def public_contract(nil, _trump), do: nil
   def public_contract(contract, trump), do: %{team: if(contract.team == 0, do: "hero", else: "opponents"), taker: contract.taker, amount: contract.amount, trump: suit_name(Map.get(contract, :suit, trump)), multiplier: contract.multiplier}
+  def public_deal_summary(%{game: %{phase: phase} = game} = state) when phase in [:deal_finished, :match_finished] do
+    deal = List.last(game.deal_history)
+
+    %{
+      taker: player_name(state, game.contract.taker),
+      contract: %{amount: game.contract.amount, trump: suit_name(game.trump), multiplier: game.contract.multiplier},
+      trick_points: %{hero: game.deal_points[0], opponents: game.deal_points[1]},
+      contract_made: Game.contract_made?(game),
+      bonuses: %{
+        dix_de_der: Enum.sum(Enum.map(game.tricks, fn {_team, tricks} -> length(tricks) end)) == 8,
+        capot: Enum.any?(game.tricks, fn {_team, tricks} -> length(tricks) == 8 end),
+        coinche: game.contract.multiplier == 2,
+        surcoinche: game.contract.multiplier == 4
+      },
+      scores: %{
+        before: %{hero: game.scores[0] - deal.scores[0], opponents: game.scores[1] - deal.scores[1]},
+        after: %{hero: game.scores[0], opponents: game.scores[1]}
+      }
+    }
+  end
+  def public_deal_summary(_state), do: nil
   def public_deal(state, deal), do: %{number: deal.number, taker: player_name(state, deal.taker), amount: deal.amount, trump: suit_name(deal.trump), winner: if(deal.winner_team == 0, do: "Votre équipe", else: "Adversaires"), scores: %{hero: deal.scores[0], opponents: deal.scores[1]}}
   def public_action(:pass), do: %{type: "pass"}
   def public_action(:coinche), do: %{type: "coinche"}

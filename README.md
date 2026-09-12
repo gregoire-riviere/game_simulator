@@ -124,6 +124,11 @@ Le mode actuel cible une table cash-game NL2 6-max simplifiee :
 
 Les PNJ utilisent des heuristiques locales, pas des appels LLM.
 
+L'écran de poker affiche aussi l'historique des 10 dernières mains. Le
+sélecteur permet d'en consulter 10, 25 ou 50 ; le Markdown renvoyé par le
+serveur est affiché comme du texte brut et n'est jamais interprété comme du
+HTML.
+
 ### Jouer à la belote
 
 La belote se lance depuis l'interface avec la permission `belote`. Deux formats
@@ -135,6 +140,11 @@ Le moteur applique les règles côté serveur : prise en deux tours et redonne e
 classique, enchères de 80 à 160, coinche et surcoinche en coinche, suivi de
 couleur, coupe et surcoupe. Les annonces ne sont pas incluses. Les plis, le dix
 de der, le capot et les contrats déterminent le score.
+
+À la fin de chaque donne, l'interface affiche avant « Donne suivante » le
+preneur, le contrat, les points de plis, l'issue et les bonus appliqués, ainsi
+que le score du match avant et après. Ces valeurs viennent de l'état calculé
+par le serveur et restent disponibles après la reprise d'une donne terminée.
 
 La partie est sauvegardée automatiquement et séparément du poker, par
 utilisateur et par format. Vous pouvez donc reprendre indépendamment une
@@ -313,7 +323,7 @@ Les routes JSON disponibles sont :
 | `DELETE /api/admin/users/:user` | Supprime un utilisateur ; permission `admin` requise. |
 | `POST /api/table` | Cree ou recupere la table temporaire de l'utilisateur. |
 | `GET /api/table` | Retourne l'etat de la table. |
-| `GET /api/table/extract?n=10` | Exporte les mains recentes en Markdown, de 1 a 50 mains. |
+| `GET /api/table/extract?n=10` | Exporte les mains recentes en Markdown, de 1 a 50 mains ; permission `llm` requise. |
 | `POST /api/table/action` | Joue `fold`, `check`, `call`, `all_in`, `bet` ou `raise_to`. |
 | `POST /api/table/advance-bot` | Avance exactement une action PNJ quand un bot doit agir. |
 | `POST /api/table/next-hand` | Lance la main suivante apres une main terminee. |
