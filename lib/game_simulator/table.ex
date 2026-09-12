@@ -36,6 +36,7 @@ defmodule GameSimulator.Table do
   def extract(table, owner, count), do: GenServer.call(table, {:extract, owner, count}, @call_timeout)
   def coaching_context(table, owner), do: GenServer.call(table, {:coaching_context, owner}, @call_timeout)
   def set_llm_mode(table, owner, mode), do: GenServer.call(table, {:set_llm_mode, owner, mode}, @call_timeout)
+  def dismiss_action_help(table, owner), do: GenServer.call(table, {:dismiss_action_help, owner}, @call_timeout)
 
   @impl true
   def init(options) do
@@ -62,6 +63,7 @@ defmodule GameSimulator.Table do
        hand_actions: Map.get(snapshot, :hand_actions, []),
        hud_stats: Map.get(snapshot, :hud_stats, %{}),
        hud_hand: Map.get(snapshot, :hud_hand, %{}),
+       action_help_dismissed?: Map.get(snapshot, :action_help_dismissed?, false),
        llm_mode: Map.get(snapshot, :llm_mode, :llm),
        mode: Map.get(snapshot, :mode, :cash_nl2),
        game_key: game_key,
@@ -89,7 +91,7 @@ defmodule GameSimulator.Table do
 
     profiles = Map.new(Enum.with_index(profiles, 1), fn {profile, seat} -> {{:bot, seat}, profile} end)
     hud_stats = snapshot |> empty_hud_stats() |> count_hud_hand(snapshot)
-    state = %{owner: owner, game: game, human_id: human_id, profiles: profiles, actions: [], hand_actions: [], hud_stats: hud_stats, hud_hand: %{}, llm_mode: :llm, mode: mode, game_key: game_key, autosave: autosave, saving?: false}
+    state = %{owner: owner, game: game, human_id: human_id, profiles: profiles, actions: [], hand_actions: [], hud_stats: hud_stats, hud_hand: %{}, action_help_dismissed?: false, llm_mode: :llm, mode: mode, game_key: game_key, autosave: autosave, saving?: false}
     {:ok, maybe_save_async(state)}
   end
 
@@ -180,6 +182,14 @@ defmodule GameSimulator.Table do
     end
   end
 
+  def handle_call({:dismiss_action_help, owner}, _from, state) do
+    with :ok <- owner?(state, owner) do
+      reply(%{state | action_help_dismissed?: true} |> maybe_save_async(), owner)
+    else
+      {:error, reason} -> {:reply, {:error, reason}, state}
+    end
+  end
+
   @impl true
   def handle_info({:save_finished, _result}, state), do: {:noreply, %{state | saving?: false}}
 
@@ -211,6 +221,7 @@ defmodule GameSimulator.Table do
       hand_actions: state.hand_actions,
       hud_stats: state.hud_stats,
       hud_hand: state.hud_hand,
+      action_help_dismissed?: state.action_help_dismissed?,
       llm_mode: state.llm_mode,
       mode: state.mode
     }
@@ -495,6 +506,7 @@ defmodule GameSimulator.Table do
     {:ok, snapshot} = Poker.Game.public_state(state.game, state.human_id)
     {:ok, leaderboard} = Poker.Game.session_leaderboard(state.game)
     llm_config = GameSimulator.Configuration.llm!()
+    actions = if(snapshot.active_player == state.human_id, do: Poker.Game.next_action(state.game) |> elem(1) |> Map.fetch!(:actions), else: [])
 
     players =
       snapshot.players
@@ -534,11 +546,25 @@ defmodule GameSimulator.Table do
       llm_available: llm_config.enabled,
       llm_mode: state.llm_mode,
       last_result: last_result(state, snapshot.phase),
-      actions: if(snapshot.active_player == state.human_id, do: Poker.Game.next_action(state.game) |> elem(1) |> Map.fetch!(:actions), else: []),
+      actions: actions,
+      action_help: action_help(state, snapshot, actions),
       recent_actions: Enum.reverse(state.actions),
       hand_actions: Enum.reverse(state.hand_actions)
     }
   end
+
+  def action_help(%{action_help_dismissed?: true}, _snapshot, _actions), do: nil
+  def action_help(state, snapshot, actions) when snapshot.active_player == state.human_id do
+    hero = Map.fetch!(snapshot.players, state.human_id)
+
+    cond do
+      :check in actions -> %{message: "Vous pouvez checker pour rester dans le coup sans miser.", dismissible: true}
+      :call in actions -> %{message: "Suivre coûte #{snapshot.current_bet - hero.contribution} jetons.", dismissible: true}
+      :all_in in actions -> %{message: "Tapis engage tous vos jetons restants.", dismissible: true}
+      true -> nil
+    end
+  end
+  def action_help(_state, _snapshot, _actions), do: nil
 
   def public_id(state, id), do: if(id == state.human_id, do: "hero", else: "bot-#{elem(id, 1)}")
 

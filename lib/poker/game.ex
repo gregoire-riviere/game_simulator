@@ -644,6 +644,7 @@ defmodule Poker.Game do
       top_ups: state.top_ups,
       players: players,
       active_player: state.active_player,
+      current_bet: state.current_bet,
       small_blind: state.small_blind,
       big_blind: state.big_blind
     }

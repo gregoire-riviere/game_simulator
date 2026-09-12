@@ -456,6 +456,17 @@ defmodule GameSimulatorWeb.Endpoint do
     end)
   end
 
+  post "/api/table/action-help/dismiss" do
+    authenticated(conn, "poker", fn conn, account ->
+      with {:ok, table} <- table_for(account.username),
+           {:ok, state} <- GameSimulator.Table.dismiss_action_help(table, account.username) do
+        send_table_json(conn, 200, state, account)
+      else
+        {:error, reason} -> table_error(conn, reason)
+      end
+    end)
+  end
+
   post "/api/table/llm-mode" do
     authenticated(conn, "llm", fn conn, account ->
       with {:ok, table} <- table_for(account.username),
