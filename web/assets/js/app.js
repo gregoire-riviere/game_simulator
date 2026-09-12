@@ -40,6 +40,9 @@ const actionPanel = document.getElementById("action-panel");
 const recentActions = document.getElementById("recent-actions");
 const leaveTableButton = document.getElementById("leave-table-button");
 const resetTableButton = document.getElementById("reset-table-button");
+const leaderboardButton = document.getElementById("leaderboard-button");
+const leaderboardDialog = document.getElementById("leaderboard-dialog");
+const leaderboardOutput = document.getElementById("leaderboard-output");
 const llmControls = document.getElementById("llm-controls");
 const llmModeSelect = document.getElementById("llm-mode-select");
 const llmCredit = document.getElementById("llm-credit");
@@ -770,12 +773,38 @@ function renderTable(nextTable) {
   renderResult();
   renderLlmMode();
   recentActions.replaceChildren(...(table.hand_actions || table.recent_actions).map(renderActionItem));
+  renderLeaderboard();
   if (openingTable || table.hand_finished) loadPokerHistory();
 
   if (!table.hand_finished && !table.hero_turn) {
     // Une requête ne fait jouer qu'un PNJ pour rendre la séquence lisible.
     botTimer = setTimeout(() => advanceBot(), 700);
   }
+}
+
+function renderLeaderboard() {
+  leaderboardOutput.replaceChildren();
+
+  const header = document.createElement("div");
+  header.className = "leaderboard-row leaderboard-header";
+  ["Rang", "Joueur", "Tapis", "Session"].forEach((text) => {
+    const cell = document.createElement("span");
+    cell.textContent = text;
+    header.append(cell);
+  });
+  leaderboardOutput.append(header);
+
+  table.leaderboard.forEach((entry) => {
+    const row = document.createElement("div");
+    row.className = `leaderboard-row${entry.status === "eliminated" ? " eliminated" : ""}`;
+    const profitLoss = `${entry.profit_loss > 0 ? "+" : ""}${money(entry.profit_loss)}`;
+    [String(entry.rank), entry.status === "eliminated" ? `${entry.name} · éliminé` : entry.name, money(entry.stack), profitLoss].forEach((text) => {
+      const cell = document.createElement("span");
+      cell.textContent = text;
+      row.append(cell);
+    });
+    leaderboardOutput.append(row);
+  });
 }
 
 async function loadPokerHistory() {
@@ -1508,6 +1537,7 @@ leaveTableButton.addEventListener("click", leaveTable);
 resetTableButton.addEventListener("click", resetTable);
 llmModeSelect.addEventListener("change", setLlmMode);
 extractButton.addEventListener("click", extractHands);
+leaderboardButton.addEventListener("click", () => leaderboardDialog.showModal());
 pokerHistoryRefresh.addEventListener("click", loadPokerHistory);
 pokerHistoryCount.addEventListener("change", loadPokerHistory);
 copyExtractButton.addEventListener("click", copyExtract);

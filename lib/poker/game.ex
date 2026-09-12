@@ -22,6 +22,7 @@ defmodule Poker.Game do
   def decision_context(game, id), do: GenServer.call(game, {:decision_context, id})
   def internal_state(game), do: GenServer.call(game, :internal_state)
   def history(game, count), do: GenServer.call(game, {:history, count})
+  def session_leaderboard(game), do: GenServer.call(game, :session_leaderboard)
 
   @impl true
   def init(options) do
@@ -89,7 +90,7 @@ defmodule Poker.Game do
       Map.has_key?(state.players, id) -> {:reply, {:error, :duplicate_player}, state}
       Enum.any?(state.players, fn {_id, player} -> player.seat == seat end) -> {:reply, {:error, :seat_taken}, state}
       true ->
-        player = %{id: id, seat: seat, stack: stack}
+        player = %{id: id, seat: seat, stack: stack, initial_stack: stack}
         {:reply, {:ok, player}, %{state | players: Map.put(state.players, id, player)}}
     end
   end
@@ -164,6 +165,26 @@ defmodule Poker.Game do
   end
 
   def handle_call({:history, _count}, _from, state), do: {:reply, {:error, :invalid_history_count}, state}
+
+  def handle_call(:session_leaderboard, _from, state) do
+    leaderboard =
+      state.players
+      |> Map.values()
+      |> Enum.sort_by(fn player -> {-player.stack, player.seat} end)
+      |> Enum.with_index(1)
+      |> Enum.map(fn {player, rank} ->
+        %{
+          rank: rank,
+          player_id: player.id,
+          seat: player.seat,
+          stack: player.stack,
+          profit_loss: player.stack - Map.get(player, :initial_stack, player.stack),
+          status: if(player.stack == 0, do: :eliminated, else: :active)
+        }
+      end)
+
+    {:reply, {:ok, leaderboard}, state}
+  end
 
   def random_available_seat(state) do
     taken_seats = state.players |> Map.values() |> Enum.map(& &1.seat)

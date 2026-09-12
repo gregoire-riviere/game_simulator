@@ -97,6 +97,10 @@ The current mode targets a simplified NL2 6-max cash-game table:
 
 NPCs use local heuristics, not LLM calls.
 
+The “Leaderboard” button shows session stacks, ordered by stack then seat, with
+each player’s profit or loss since the table was created. Eliminated players
+remain visible until the table is reset or closed.
+
 The poker screen also loads the 10 most recent hands. The selector can display
 10, 25, or 50 hands; server-returned Markdown is rendered as plain text and is
 never interpreted as HTML.

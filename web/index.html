@@ -118,6 +118,7 @@
                     <option value="off">Sans LLM</option>
                   </select>
                 </span>
+                <button id="leaderboard-button" class="leave-table-button" type="button">Classement</button>
                 <button id="reset-table-button" class="leave-table-button" type="button">Nouvelle partie</button>
                 <button id="leave-table-button" class="leave-table-button" type="button">Quitter la table</button>
               </div>
@@ -150,6 +151,18 @@
               </div>
               <pre id="poker-history-output">Chargement…</pre>
             </section>
+            <dialog id="leaderboard-dialog" class="coaching-dialog leaderboard-dialog" aria-labelledby="leaderboard-title">
+              <form method="dialog">
+                <div class="extract-header">
+                  <div>
+                    <p class="eyebrow">Session</p>
+                    <h2 id="leaderboard-title">Classement</h2>
+                  </div>
+                  <button class="leave-table-button" type="submit">Fermer</button>
+                </div>
+                <div id="leaderboard-output"></div>
+              </form>
+            </dialog>
             <dialog id="coaching-dialog" class="coaching-dialog" aria-labelledby="coaching-title">
               <form method="dialog">
                 <div class="extract-header">

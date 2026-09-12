@@ -124,6 +124,11 @@ Le mode actuel cible une table cash-game NL2 6-max simplifiee :
 
 Les PNJ utilisent des heuristiques locales, pas des appels LLM.
 
+Le bouton « Classement » affiche les tapis de la session en cours, classés par
+tapis décroissant puis par siège. Il indique le gain ou la perte depuis la
+création de la table et conserve les joueurs éliminés jusqu'à la recréation ou
+la fermeture de la table.
+
 L'écran de poker affiche aussi l'historique des 10 dernières mains. Le
 sélecteur permet d'en consulter 10, 25 ou 50 ; le Markdown renvoyé par le
 serveur est affiché comme du texte brut et n'est jamais interprété comme du
