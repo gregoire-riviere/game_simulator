@@ -49,6 +49,10 @@ const extractPanel = document.getElementById("extract-panel");
 const extractOutput = document.getElementById("extract-output");
 const copyExtractButton = document.getElementById("copy-extract-button");
 const closeExtractButton = document.getElementById("close-extract-button");
+const pokerHistory = document.getElementById("poker-history");
+const pokerHistoryCount = document.getElementById("poker-history-count");
+const pokerHistoryRefresh = document.getElementById("poker-history-refresh");
+const pokerHistoryOutput = document.getElementById("poker-history-output");
 const coachingButton = document.getElementById("coaching-button");
 const coachingDialog = document.getElementById("coaching-dialog");
 const coachingAdvice = document.getElementById("coaching-advice");
@@ -72,6 +76,8 @@ const beloteTrick = document.getElementById("belote-trick");
 const beloteHand = document.getElementById("belote-hand");
 const beloteActions = document.getElementById("belote-actions");
 const beloteHistory = document.getElementById("belote-history");
+const beloteDealSummary = document.getElementById("belote-deal-summary");
+const beloteDealSummaryContent = document.getElementById("belote-deal-summary-content");
 const mrWhiteLobby = document.getElementById("mr-white-lobby");
 const mrWhiteGame = document.getElementById("mr-white-game");
 const mrWhiteForm = document.getElementById("mr-white-form");
@@ -167,6 +173,7 @@ function renderAccess() {
   adminNav.hidden = !hasPermission("admin");
   adminNavLabel.hidden = !hasPermission("admin");
   llmControls.hidden = !hasPermission("llm");
+  pokerHistory.hidden = !hasPermission("llm");
   showView(defaultView());
 }
 
@@ -360,6 +367,33 @@ function renderBeloteActions() {
   actions.filter((action) => ["coinche", "surcoinche"].includes(action.type)).forEach((action) => beloteActions.append(beloteChoice(beloteActionLabel(action), true, () => submitBeloteAction(action))));
 }
 
+function renderBeloteDealSummary() {
+  const summary = beloteTable.deal_summary;
+  beloteDealSummary.hidden = !summary;
+  beloteDealSummaryContent.replaceChildren();
+  if (!summary) return;
+
+  const multiplier = summary.contract.multiplier > 1 ? ` ×${summary.contract.multiplier}` : "";
+  const bonuses = [
+    ["dix_de_der", "dix de der"],
+    ["capot", "capot"],
+    ["coinche", "coinche"],
+    ["surcoinche", "surcoinche"]
+  ].filter(([key]) => summary.bonuses[key]).map(([, label]) => label);
+  const lines = [
+    `Preneur : ${summary.taker} · Contrat : ${summary.contract.amount} ${summary.contract.trump}${multiplier}`,
+    `Points de plis : votre équipe ${summary.trick_points.hero} · adversaires ${summary.trick_points.opponents}`,
+    `Contrat ${summary.contract_made ? "réussi" : "chuté"} · Bonus/malus : ${bonuses.join(", ") || "aucun"}`,
+    `Score du match : ${summary.scores.before.hero}–${summary.scores.before.opponents} → ${summary.scores.after.hero}–${summary.scores.after.opponents}`
+  ];
+
+  beloteDealSummaryContent.replaceChildren(...lines.map((text) => {
+    const line = document.createElement("p");
+    line.textContent = text;
+    return line;
+  }));
+}
+
 function renderBelote(nextTable) {
   beloteTable = nextTable;
   if (!beloteTable.actions.some((action) => action.type === "bid")) beloteBidAmount = null;
@@ -420,6 +454,7 @@ function renderBelote(nextTable) {
     }
     return item;
   }));
+  renderBeloteDealSummary();
   renderBeloteActions();
 
   beloteHistory.replaceChildren();
@@ -718,6 +753,7 @@ function renderActionItem(item) {
 }
 
 function renderTable(nextTable) {
+  const openingTable = tableScreen.hidden;
   table = nextTable;
   actionPending = false;
   clearTimeout(botTimer);
@@ -734,10 +770,26 @@ function renderTable(nextTable) {
   renderResult();
   renderLlmMode();
   recentActions.replaceChildren(...(table.hand_actions || table.recent_actions).map(renderActionItem));
+  if (openingTable || table.hand_finished) loadPokerHistory();
 
   if (!table.hand_finished && !table.hero_turn) {
     // Une requête ne fait jouer qu'un PNJ pour rendre la séquence lisible.
     botTimer = setTimeout(() => advanceBot(), 700);
+  }
+}
+
+async function loadPokerHistory() {
+  if (!hasPermission("llm")) return;
+  pokerHistoryRefresh.disabled = true;
+
+  try {
+    const extract = await api(`/api/table/extract?n=${pokerHistoryCount.value}`);
+    // Le Markdown reste du texte brut : aucune donnée d'une main ne devient du HTML exécutable.
+    pokerHistoryOutput.textContent = extract.text;
+  } catch (_error) {
+    pokerHistoryOutput.textContent = "Impossible de charger l’historique des mains.";
+  } finally {
+    pokerHistoryRefresh.disabled = false;
   }
 }
 
@@ -1456,6 +1508,8 @@ leaveTableButton.addEventListener("click", leaveTable);
 resetTableButton.addEventListener("click", resetTable);
 llmModeSelect.addEventListener("change", setLlmMode);
 extractButton.addEventListener("click", extractHands);
+pokerHistoryRefresh.addEventListener("click", loadPokerHistory);
+pokerHistoryCount.addEventListener("change", loadPokerHistory);
 copyExtractButton.addEventListener("click", copyExtract);
 closeExtractButton.addEventListener("click", closeExtract);
 coachingButton.addEventListener("click", requestCoaching);

@@ -85,6 +85,10 @@ button:disabled { cursor: wait; opacity: .65; }
 .extract-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: .8rem; }
 .extract-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
 .extract-panel textarea { width: 100%; min-height: 18rem; margin: 0; resize: vertical; color: #dbeafe; background: #020617; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: .78rem; line-height: 1.45; }
+.poker-history .extract-header { align-items: center; }
+.poker-history .extract-actions { align-items: center; color: #aab4ca; font-size: .78rem; }
+.poker-history select { min-height: 2.35rem; padding: .4rem .55rem; border: 1px solid #ffffff29; border-radius: .55rem; color: #f8fafc; background: #080c18; }
+.poker-history pre { max-height: 28rem; margin: 0; overflow: auto; white-space: pre-wrap; color: #dbeafe; font: .78rem/1.45 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
 .coaching-dialog { width: min(92vw, 28rem); padding: 1rem; border: 1px solid #7dd3fc55; border-radius: .8rem; color: #f8fafc; background: #07111d; box-shadow: 0 1.5rem 4rem #00000088; }
 .coaching-dialog::backdrop { background: #020617aa; }
 .coaching-dialog form { display: grid; gap: .8rem; }
@@ -202,6 +206,9 @@ button:disabled { cursor: wait; opacity: .65; }
 .belote-choice { min-width: 3.2rem; min-height: 2.45rem; padding: .45rem .65rem; border: 1px solid #7dd3fc55; border-radius: .55rem; color: #e0f2fe; background: #0f2f3bcc; font-weight: 800; }
 .belote-choice:hover, .belote-choice.selected { color: #042f2e; border-color: #99f6e4; background: #5eead4; }
 .belote-next-deal { min-width: 11rem; color: #052e16; border-color: #86efac; background: #86efac; }
+.belote-deal-summary { border-color: #86efac55; }
+.belote-deal-summary-content { display: grid; gap: .35rem; margin-top: .8rem; color: #dbeafe; }
+.belote-deal-summary-content p { margin: 0; }
 
 /* Mr. White privilégie une seule action lisible quand le téléphone change de main. */
 .mr-white-form { max-width: 36rem; margin-top: 1.5rem; }

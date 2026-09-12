@@ -135,6 +135,21 @@
               </div>
               <textarea id="extract-output" readonly spellcheck="false"></textarea>
             </section>
+            <section id="poker-history" class="activity-card poker-history" aria-labelledby="poker-history-title">
+              <div class="extract-header">
+                <h2 id="poker-history-title">Historique des mains</h2>
+                <div class="extract-actions">
+                  <label for="poker-history-count">Afficher</label>
+                  <select id="poker-history-count" aria-label="Nombre de mains dans l’historique">
+                    <option value="10" selected>10 mains</option>
+                    <option value="25">25 mains</option>
+                    <option value="50">50 mains</option>
+                  </select>
+                  <button id="poker-history-refresh" class="leave-table-button" type="button">Actualiser</button>
+                </div>
+              </div>
+              <pre id="poker-history-output">Chargement…</pre>
+            </section>
             <dialog id="coaching-dialog" class="coaching-dialog" aria-labelledby="coaching-title">
               <form method="dialog">
                 <div class="extract-header">
@@ -204,6 +219,10 @@
               <div id="belote-players" class="belote-players"></div>
               <div id="belote-trick" class="belote-trick" aria-label="Pli en cours"></div>
               <div id="belote-hand" class="belote-hand" aria-label="Vos cartes"></div>
+            </section>
+            <section id="belote-deal-summary" class="activity-card belote-deal-summary" hidden aria-labelledby="belote-deal-summary-title">
+              <h2 id="belote-deal-summary-title">Récapitulatif de la donne</h2>
+              <div id="belote-deal-summary-content"></div>
             </section>
             <div id="belote-actions" class="belote-actions" aria-label="Actions de belote"></div>
             <section class="activity-card"><h2>Dernier pli et historique des donnes</h2><ol id="belote-history"></ol></section>

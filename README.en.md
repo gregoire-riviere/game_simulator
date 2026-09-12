@@ -97,6 +97,10 @@ The current mode targets a simplified NL2 6-max cash-game table:
 
 NPCs use local heuristics, not LLM calls.
 
+The poker screen also loads the 10 most recent hands. The selector can display
+10, 25, or 50 hands; server-returned Markdown is rendered as plain text and is
+never interpreted as HTML.
+
 ### Configure the application
 
 Configuration is resolved at startup, with the same behavior under `mix` and in
@@ -260,7 +264,7 @@ Available JSON routes:
 | `DELETE /api/admin/users/:user` | Deletes a user; requires `admin`. |
 | `POST /api/table` | Creates or returns the user's temporary table. |
 | `GET /api/table` | Returns the table state. |
-| `GET /api/table/extract?n=10` | Exports recent hands as Markdown, from 1 to 50 hands. |
+| `GET /api/table/extract?n=10` | Exports recent hands as Markdown, from 1 to 50 hands; requires `llm`. |
 | `POST /api/table/action` | Plays `fold`, `check`, `call`, `all_in`, `bet`, or `raise_to`. |
 | `POST /api/table/advance-bot` | Advances exactly one NPC action when a bot must act. |
 | `POST /api/table/next-hand` | Starts the next hand after a finished hand. |

@@ -245,6 +245,9 @@ defmodule Belote.Game do
     end
   end
 
+  def contract_made?(%{variant: :classic} = state), do: state.deal_points[state.contract.team] > 81
+  def contract_made?(state), do: state.deal_points[state.contract.team] >= state.contract.amount
+
   def capot_score(state, team, points) do
     if length(state.tricks[team]) == 8, do: 252, else: points
   end
