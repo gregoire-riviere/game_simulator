@@ -559,6 +559,7 @@ defmodule GameSimulator.Table do
 
     cond do
       :check in actions -> %{message: "Vous pouvez checker pour rester dans le coup sans miser.", dismissible: true}
+      snapshot.current_bet - hero.contribution > hero.stack -> %{message: "Tapis engage tous vos jetons restants.", dismissible: true}
       :call in actions -> %{message: "Suivre coûte #{snapshot.current_bet - hero.contribution} jetons.", dismissible: true}
       :all_in in actions -> %{message: "Tapis engage tous vos jetons restants.", dismissible: true}
       true -> nil

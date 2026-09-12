@@ -26,6 +26,18 @@ defmodule GameSimulator.ActionHelpTest do
     assert restored.action_help == nil
   end
 
+  test "explains all-in when the amount to call exceeds the remaining stack" do
+    {:ok, table} = GameSimulator.Table.start_link(owner: "alice")
+    set_betting_state(table, current_bet: 10, hero_street: 2, hero_stack: 5)
+
+    assert {:ok, state} = GameSimulator.Table.state(table, "alice")
+
+    assert state.action_help == %{
+             message: "Tapis engage tous vos jetons restants.",
+             dismissible: true
+           }
+  end
+
   def set_betting_state(table, options) do
     table_state = :sys.get_state(table)
     hero = table_state.human_id
