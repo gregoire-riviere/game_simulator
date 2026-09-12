@@ -97,6 +97,10 @@ The current mode targets a simplified NL2 6-max cash-game table:
 
 NPCs use local heuristics, not LLM calls.
 
+When it is the player’s turn, contextual help explains checking, the exact call
+amount, or going all-in. It can be dismissed for the current session without
+changing the game rules.
+
 The poker screen also loads the 10 most recent hands. The selector can display
 10, 25, or 50 hands; server-returned Markdown is rendered as plain text and is
 never interpreted as HTML.

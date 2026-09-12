@@ -124,6 +124,7 @@ button:disabled { cursor: wait; opacity: .65; }
 .seat-6 { top: 22%; left: 9%; }
 /* Les boutons sont créés dynamiquement selon les actions légales du moteur. */
 .action-panel { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; min-height: 4.5rem; margin-top: 1rem; padding: .75rem; border: 1px solid #ffffff1f; border-radius: .8rem; background: #151b2dd9; color: #aab4ca; }
+.action-help { display: flex; align-items: center; gap: .55rem; flex-basis: 100%; color: #dbeafe; font-size: .85rem; }
 .hand-result { margin-top: 1rem; padding: 1.25rem; border: 1px solid #86efac66; border-radius: .8rem; background: #86efac12; }
 .hand-result > p:not(.eyebrow) { margin: .45rem 0 0; color: #bbf7d0; }
 #hand-result-winners { display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: .75rem; margin-top: 1rem; }
