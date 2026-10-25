@@ -90,7 +90,7 @@ export function mountTraversal(page) {
       label(String.fromCharCode(65 + z), z - 4.5, 5.5);
     }
     const maximum = Math.max(...heights.flat());
-    status.textContent = `Graine : ${seed.value} · 100 cases · hauteurs 0–${maximum} · symétrie centrale · écart adjacent ≤ 1`;
+    status.textContent = `Graine : ${seed.value} · 100 cases · hauteurs 0–${maximum} · symétrie centrale · écart entre voisins ≤ 2`;
     // La table permet de vérifier les hauteurs exactes du rendu.
     const body = page.querySelector('#traversal-heights');
     body.replaceChildren();
