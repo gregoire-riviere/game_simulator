@@ -110,7 +110,7 @@ export function mountTraversal(page, api) {
     for (const move of (state?.legal || []).filter(m => m.piece === selected)) {
       const y = move.kind === 'exit' ? 0.25 : 0.28 + heights[move.row][move.col] * 0.35;
       const color = move.kind === 'attack' ? 0xfb7185 : move.kind === 'exit' ? 0x86efac : 0x7dd3fc;
-      const marker = new THREE.Mesh(new THREE.RingGeometry(0.31, 0.43, move.kind === 'attack' ? 4 : 32), new THREE.MeshBasicMaterial({ color, side: THREE.DoubleSide, depthTest: false }));
+      const marker = new THREE.Mesh(new THREE.RingGeometry(0.31, 0.43, move.kind === 'attack' ? 4 : 32), new THREE.MeshBasicMaterial({ color, side: THREE.DoubleSide }));
       marker.rotation.x = -Math.PI / 2;
       marker.position.set(move.col - 4.5, y, move.row - 4.5);
       marker.renderOrder = 1;
