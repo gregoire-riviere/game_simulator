@@ -20,13 +20,24 @@ defmodule GameSimulator.Traversal.Bot do
         if difficulty == "easy" do
           fallback
         else
-          {best, _score, _nodes} = Enum.reduce_while(Enum.take(options, budget.width), {fallback, -2_000_000, budget.nodes}, fn {move, _estimate}, {best, score, nodes} ->
-            if exhausted?(nodes, deadline) do
-              {:halt, {best, score, nodes}}
-            else
-              {value, left} = search(Game.apply_action(game, move), budget.depth - 1, game.turn, budget, nodes - 1, deadline, -2_000_000, 2_000_000)
-              if value > score, do: {:cont, {move, value, left}}, else: {:cont, {best, score, left}}
-            end
+          # Only compare completed iterations at the same depth. A partial deeper
+          # search must not replace a fully checked shallower defensive choice.
+          {best, _nodes} = Enum.reduce_while(2..budget.depth, {fallback, budget.nodes}, fn depth, {previous, nodes} ->
+            candidates = Enum.take(options, budget.width)
+            {best, _score, left, complete} = Enum.reduce_while(candidates, {previous, -2_000_000, nodes, true}, fn {move, _estimate}, {best, score, nodes, _complete} ->
+              if exhausted?(nodes, deadline) do
+                {:halt, {best, score, nodes, false}}
+              else
+                {value, left} = search(Game.apply_action(game, move), depth - 1, game.turn, budget, nodes - 1, deadline, -2_000_000, 2_000_000)
+                cond do
+                  exhausted?(left, deadline) -> {:halt, {best, score, left, false}}
+                  value == 1_000_000 -> {:halt, {move, value, left, true}}
+                  value > score -> {:cont, {move, value, left, true}}
+                  true -> {:cont, {best, score, left, true}}
+                end
+              end
+            end)
+            if complete, do: {:cont, {best, left}}, else: {:halt, {previous, left}}
           end)
           best
         end
@@ -105,7 +116,7 @@ defmodule GameSimulator.Traversal.Bot do
   # count whole legal turns until a real capture, including blockers and forests.
   # They are built once at the root; search reuses them as a positional estimate.
   def interceptions(game, terrain) do
-    if game.exited != [] do
+    if game.result != nil do
       []
     else
       Game.active(game)
@@ -180,7 +191,7 @@ defmodule GameSimulator.Traversal.Bot do
   def interception_score(game, player, terrain) do
     Enum.reduce(Map.get(terrain, :interceptions, []), 0, fn threat, sum ->
       runner = Enum.find(Game.active(game), &(&1.id == threat.runner))
-      if runner == nil or game.exited != [] do
+      if runner == nil do
         sum
       else
         margin = Enum.map(threat.fields, fn {id, turn, distances} ->

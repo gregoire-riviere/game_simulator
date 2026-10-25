@@ -80,7 +80,12 @@ defmodule GameSimulator.Traversal.BotTest do
   @tag timeout: 300_000
   test "medium and hard intercept a lateral Sentinel rush from the initial formation" do
     ridge = for row <- 0..9, do: for(col <- 0..9, do: if(row in [4, 5] and col not in [0, 9], do: 1, else: 0))
-    for terrain <- [board(), ridge], side <- [0, 9], difficulty <- ["medium", "hard"], variant <- ["classic", "forests"] do
+    # Reproducible generator outputs for seeds rush-0 and rush-1. The former
+    # medium bot lost the right flank on rush-0 and both flanks on rush-1.
+    varied = [[4, 4, 4, 5, 4, 4, 2, 3, 3, 3], [4, 5, 5, 4, 4, 4, 3, 2, 3, 2], [4, 4, 4, 3, 3, 2, 2, 2, 2, 1], [3, 2, 2, 4, 2, 2, 1, 1, 1, 0], [3, 2, 2, 2, 2, 2, 1, 2, 2, 2], [2, 2, 2, 1, 2, 2, 2, 2, 2, 3], [0, 1, 1, 1, 2, 2, 4, 2, 2, 3], [1, 2, 2, 2, 2, 3, 3, 4, 4, 4], [2, 3, 2, 3, 4, 4, 4, 5, 5, 4], [3, 3, 3, 2, 4, 4, 5, 4, 4, 4]]
+    varied_two = [[1, 1, 2, 3, 3, 2, 1, 0, 2, 3], [1, 2, 3, 2, 1, 3, 2, 1, 1, 2], [1, 2, 3, 1, 2, 2, 2, 2, 1, 1], [3, 2, 1, 2, 2, 1, 2, 3, 2, 1], [4, 3, 1, 2, 2, 2, 3, 2, 2, 3], [3, 2, 2, 3, 2, 2, 2, 1, 3, 4], [1, 2, 3, 2, 1, 2, 2, 1, 2, 3], [1, 1, 2, 2, 2, 2, 1, 3, 2, 1], [2, 1, 1, 2, 3, 1, 2, 3, 2, 1], [3, 2, 0, 1, 2, 3, 3, 2, 1, 1]]
+    for terrain <- [board(), ridge, varied, varied_two], side <- [0, 9], difficulty <- ["medium", "hard"], variant <- ["classic", "forests"],
+        variant == "classic" or terrain in [board(), ridge] do
       initial = Game.new(terrain, variant, "sentinel-rush")
       id = if side == 0, do: "1-0", else: "1-5"
       final = Enum.reduce_while(1..10, initial, fn _, state ->
@@ -118,9 +123,46 @@ defmodule GameSimulator.Traversal.BotTest do
   test "capture fields require legal strength, blockers and forest turns" do
     state = %{game([piece("sentinel", 1, 3, 0, "runner"), piece("sentinel", 2, 0, 0, "guard"), piece("explorer", 2, 0, 9, "weak")]) | turn: 2}
     assert Bot.capture_distances(state, "guard", "runner")[{0, 0}] == 1
-    refute Map.has_key?(Bot.capture_distances(state, "weak", "runner"), {0, 0})
+    refute Map.has_key?(Bot.capture_distances(state, "weak", "runner"), {0, 9})
+    wall = for col <- 0..9, do: piece("explorer", 2, 1, col, "wall-#{col}")
+    blocked = %{state | pieces: state.pieces ++ wall}
+    refute Map.has_key?(Bot.capture_distances(blocked, "guard", "runner"), {0, 0})
     forest = %{state | forests: [%{row: 1, col: 0}]}
     assert Bot.capture_distances(forest, "guard", "runner")[{0, 0}] > 1
+  end
+
+
+  test "a developed full formation retains a strong interceptor within the response budget" do
+    initial = Game.new(board())
+    pieces = Enum.map(initial.pieces, fn piece ->
+      cond do
+        piece.id == "1-0" -> %{piece | row: 6, col: 0}
+        piece.id == "2-2" -> %{piece | row: 5, col: 0}
+        piece.id == "2-3" -> %{piece | row: 6, col: 1}
+        true -> piece
+      end
+    end)
+    state = %{initial | pieces: pieces, turn: 2}
+    fields = Bot.interceptions(state, Bot.terrain(state.board))
+    assert Enum.any?(hd(fields).fields, fn {id, _turn, _distances} -> id in ["2-0", "2-5"] end)
+    {elapsed, move} = :timer.tc(fn -> Bot.choose(state, "hard") end)
+    assert move in Game.actions(state)
+    assert elapsed < 3_000_000
+  end
+
+
+  test "an Explorer exit does not erase the opposing Sentinel's winning second exit" do
+    exited = %{piece("explorer", 2, 9, 9, "scorer") | status: "exited"}
+    state = %{game([piece("sentinel", 1, 3, 0, "runner"), piece("sentinel", 2, 0, 2, "guard"), exited]) |
+      turn: 2, exited: ["scorer"], scores: [0, 1]}
+    fields = Bot.interceptions(state, Bot.terrain(state.board))
+    assert length(fields) == 1
+    assert Bot.choose(state, "medium").piece == "guard"
+    # The threat really is a loss after the first one-point exit.
+    runner = Enum.find(state.pieces, &(&1.id == "runner"))
+    near_exit = %{state | pieces: [%{runner | row: 0}, piece("sentinel", 2, 6, 9, "guard"), exited], turn: 1}
+    move = Enum.find(Game.legal(near_exit, "runner"), &(&1.kind == "exit"))
+    assert Game.apply_action(near_exit, move).result == %{winner: 1, reason: "two_exits"}
   end
 
 end

@@ -64,7 +64,10 @@ multiplayer, LLM or new dependency is introduced.
 
 Easy chooses the highest immediate heuristic value. Medium anticipates one
 opponent reply (depth 2, beam 12, at most 500 searched nodes, 800 ms deadline).
-Hard adds its own next move (depth 3, beam 18, at most 2,500 searched nodes, 1,600 ms).
+Hard adds its own next move (maximum depth 3, beam 18, at most 2,500 searched nodes, 1,600 ms).
+Medium and hard complete depth 2 before trying a deeper root iteration; an
+interrupted iteration keeps the last complete choice, or the ranked fallback
+if no iteration completed. The node budget is shared across iterations.
 Equivalent exit columns for a given piece are collapsed in search only; all
 legal exit choices remain available to the human. When facing an immediate
 winning threat, medium and hard retain verified defensive moves whenever found.
@@ -73,9 +76,22 @@ heuristic weights exit scores, strength/captures, progression, early Sentinel
 progression, terrain costs, adjacent support and immediate threats. Weighted
 distance fields to the exit are computed once per side for each decision and
 reused during search; they include elevation costs and ignore occupants.
+Medium and hard also plan interception of opposing Sentinels advanced at least
+three rows. For each, up to four legal fastest-advance positions are projected.
+The two strongest defenders (distance breaks ties) get reverse capture fields:
+whole turns of legal movement ending in a legal capture, with actual terrain,
+occupants, strength, support and forest stopping rules. At most 1,600 bounded
+100-cell-origin legal queries build these fields once per decision. Search then
+reuses their interception margin instead of waiting for adjacent danger. A prior
+Explorer/Vanguard exit does not erase a Sentinel's potential winning second exit.
+These are positional estimates: the projected route, blockers and supports stay
+fixed during search, and a rival can change its route. They do not prove a forced
+capture. Easy keeps its immediate scoring behavior.
+
 Search uses
 alpha-beta pruning; legal generation itself is bounded to 6 pieces and 100 cells.
-The monotonic deadline begins before root ranking; a currently running bounded
+The monotonic search deadline begins after the fixed terrain/interception
+precomputation and before root ranking; a currently running bounded
 legal-generation/ranking operation may finish after the deadline. This is a
 bounded algorithm, not a hard real-time guarantee. Node limits count searched
 descendants, not every heuristic evaluation used to rank legal moves or check
@@ -127,3 +143,22 @@ Les trois bots choisissent exclusivement parmi les actions légales du moteur ; 
 estimation de distance ajoute un coût de 2 PM par entrée en forêt, approximation du
 ralentissement sans modifier les coûts réels ni la recherche bornée. Les arbres
 sont décoratifs, hors raycast, et les cases « F » sont aussi lisibles dans la table.
+
+
+## Lateral Sentinel rush regressions
+
+A legal scripted human commits its initial left/right Sentinel to the flank,
+then advances on that flank. Regression tests cover both sides and medium/hard
+on flat terrain, a symmetric ridge, and exact generated `rush-0` / `rush-1`
+boards; flat/ridge cases also run in Forêts. The previous medium bot lost the
+right flank on `rush-0` and both flanks on `rush-1`; the interception heuristic
+captures these runners. Additional tests cover a full developed formation's
+response time, weak defenders, an occupied wall, forest slowdown and a winning
+Sentinel second exit. Existing immediate-win, forced-finish and three-level tests
+remain in place.
+
+This is stronger play, not a guarantee against every rush. Exploratory generated
+positions still reveal weaknesses, including a winning offensive race abandoned
+on `rush-11` right flank, and hard Forêts on `rush-1` left flank. Those positions
+are not represented as solved. Search results can vary with machine load when
+the deadline interrupts an iteration. Browser validation remains separate.
