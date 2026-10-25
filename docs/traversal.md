@@ -63,15 +63,26 @@ carry the same version and cannot act after replacement or game over. No persist
 multiplayer, LLM or new dependency is introduced.
 
 Easy chooses the highest immediate heuristic value. Medium anticipates one
-opponent reply (depth 2, beam 5, at most 70 searched nodes, 180 ms deadline).
-Hard adds its own next move (depth 3, beam 8, at most 360 searched nodes, 600 ms).
+opponent reply (depth 2, beam 12, at most 500 searched nodes, 800 ms deadline).
+Hard adds its own next move (depth 3, beam 18, at most 2,500 searched nodes, 1,600 ms).
+Equivalent exit columns for a given piece are collapsed in search only; all
+legal exit choices remain available to the human. When facing an immediate
+winning threat, medium and hard retain verified defensive moves whenever found.
 All levels rank terminal wins/losses before positional values. The shared
 heuristic weights exit scores, strength/captures, progression, early Sentinel
-progression, terrain costs, adjacent support and immediate threats. Search uses
+progression, terrain costs, adjacent support and immediate threats. Weighted
+distance fields to the exit are computed once per side for each decision and
+reused during search; they include elevation costs and ignore occupants.
+Search uses
 alpha-beta pruning; legal generation itself is bounded to 6 pieces and 100 cells.
 The monotonic deadline begins before root ranking; a currently running bounded
 legal-generation/ranking operation may finish after the deadline. This is a
-bounded algorithm, not a hard real-time guarantee. No external calls are used.
+bounded algorithm, not a hard real-time guarantee. Node limits count searched
+descendants, not every heuristic evaluation used to rank legal moves or check
+immediate threats. No external calls are used. Tactical regressions distinguish
+greedy scoring from necessary defence and verify a forced Sentinel finish
+beyond the medium horizon; these examples do not imply a stronger level wins
+every match.
 
 ## Client and validation
 
