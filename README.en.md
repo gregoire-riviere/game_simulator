@@ -321,21 +321,22 @@ The generic token API provided by `html_handler` is disabled: it accepts an
 arbitrary user identifier. Any future identity source must authenticate the user
 server-side, then call `GameSimulatorWeb.Auth.issue_token/1`.
 
-### Traversal visual prototype
+### Traversal against algorithmic bots
 
-Node.js 22+ and npm are required to prepare the self-hosted Three.js 0.170.0 modules.
-Run `npm ci` and `npm run prepare:vendor` before compiling browser assets, including
-release builds. Run `npm test` to check terrain generation and the prepared vendor.
+Grant `traversal` permission (admins already have access), then open Traversal.
+Choose a seed and easy/medium/hard difficulty before starting a new temporary
+game. You play blue from row 10. Click a piece to see legal movement (blue),
+captures (red) and exits (green); equivalent buttons support keyboard play.
+Drag to orbit and scroll/pinch to zoom. The approved varied symmetric terrain
+generator is unchanged. Original solids follow the official one/two/three upper
+vertices: pentagonal pyramid, quadrilateral wedge, triangular prism.
 
-Grant `traversal` permission (admins already have access), then open Traversal in
-the existing navigation. Stage 1 includes a seeded, centrally symmetric 10×10
-terrain with integer heights 0–5 and six placeholder pieces per side. Regenerating
-the same seed preserves the board. Drag to rotate, scroll or pinch to zoom; use
-the top/reset buttons and the height table to inspect the result. WebGL is required.
-Terrain combines interpolated noise at two scales and rounds the heights into
-open areas, plateaus, ridges and valleys. Relief amplitude and detail vary by seed;
-a board need not use all six levels. Adjacent differences are limited to 2,
-including diagonals. Central symmetry intentionally repeats terrain on the
-opposite side. This replaces the diamond peaks: existing seeds produce a new
-layout, still reproducible within this generator version.
-Movement, combat, multiplayer and persistence are not implemented at this stage.
+Elixir validates all moves, combat and outcomes. Bots use bounded algorithmic
+search, without LLMs. One session per authenticated user rejects stale or illegal
+actions. New games replace the temporary game; nothing is persisted.
+See [verified rules, edge cases, search budgets and tests](docs/traversal.md).
+
+Run `npm ci && npm run prepare:vendor && npm test`, then `mix test` and
+`mix install_minifiers && mix compile_front`. Three.js 0.170.0 remains the only
+added dependency, hosted locally. WebGL is required. Desktop/mobile visual
+validation is separate from CI and must be performed before visual sign-off.

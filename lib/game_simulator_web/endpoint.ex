@@ -270,8 +270,20 @@ defmodule GameSimulatorWeb.Endpoint do
   end
 
   get "/api/traversal" do
-    authenticated(conn, "traversal", fn conn, _account ->
-      send_json(conn, 200, %{prototype: true, board_size: 10})
+    authenticated(conn, "traversal", fn conn, account ->
+      traversal_reply(conn, GameSimulator.Traversal.Session.request(account.username, :get))
+    end)
+  end
+
+  post "/api/traversal" do
+    authenticated(conn, "traversal", fn conn, account ->
+      traversal_reply(conn, GameSimulator.Traversal.Session.request(account.username, {:new, conn.body_params["board"], conn.body_params["difficulty"]}))
+    end)
+  end
+
+  post "/api/traversal/move" do
+    authenticated(conn, "traversal", fn conn, account ->
+      traversal_reply(conn, GameSimulator.Traversal.Session.request(account.username, {:move, conn.body_params}))
     end)
   end
 
@@ -506,6 +518,12 @@ defmodule GameSimulatorWeb.Endpoint do
     )
   end
 
+  def traversal_reply(conn, {:ok, state}), do: send_json(conn, 200, state)
+  def traversal_reply(conn, {:error, reason}) do
+    status = if reason in [:stale_game, :not_your_turn], do: 409, else: 422
+    send_json(conn, status, %{error: reason})
+  end
+
   def static_directory do
     Application.app_dir(:game_simulator, "priv/static")
   end
@@ -681,3 +699,4 @@ defmodule GameSimulatorWeb.Endpoint do
   def user_error(conn, :invalid_credentials), do: send_json(conn, 422, %{error: "invalid_credentials"})
   def user_error(conn, _reason), do: send_json(conn, 500, %{error: "users_unavailable"})
 end
+

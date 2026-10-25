@@ -1,0 +1,95 @@
+# Traversal: rules and implementation
+
+Rules checked on 25 October 2026 against https://www.traversalgame.com/rules,
+the official RulesPage English text/tutorial and the public game runtime
+served by that site (entry `index-CP7eMlg-.js`). The site links its public project
+from About: https://github.com/darkfireXXI/board_game. The rules engine here is an
+independent Elixir implementation. No official source code or visual asset is
+copied. The fixture contains observable positions/actions only, obtained by
+running the public runtime: 16 situations, 1,440 legal actions, flat terrain and
+three varied generated terrains, followed by one move per situation.
+
+## Rules resolved against the running game
+
+- 10×10, integer elevations 0–5, neighbouring elevation differences ≤2.
+  Each side begins with Sentinel, Vanguard, Explorer, Explorer, Vanguard, Sentinel
+  in columns C–H; the human starts on row 10 and moves toward row 1.
+- Explorer: movement 5, strength 1; Vanguard: 4/2; Sentinel: 3/3.
+  Normal movement is orthogonal, may turn, and each step costs
+  `1 + abs(destination height - previous height)`. Occupied cells cannot be
+  crossed. A legal capture may follow normal movement and ends the turn.
+- Combat requires attack ≥ defence. Compare the attacker's **turn origin**
+  elevation with the target: +1 higher, −1 lower. Add the base strengths of
+  friendly pieces orthogonally adjacent to the target, excluding the attacker.
+  Defence adds 1 for each friendly piece orthogonally adjacent to the defender.
+  Vanguard adds 1 only when the **minimum** normal path cost to that target is
+  exactly 4: an artificial detour never grants charge.
+- Explorer may instead move one diagonal or jump two cardinal cells, ignoring
+  elevation. A jump's intermediate cell must be empty (either colour blocks it).
+  This is the whole turn, cannot combine with normal travel, and may capture
+  if combat succeeds. Diagonal movement from the last row, or a forward jump
+  from the penultimate row, may exit. Normal destinations take precedence over
+  a special destination, including an attack denied by normal combat checks,
+  matching the public runtime. The UI marks special actions as powers.
+- Normal exit costs 1 movement point from the opposite last row; it can follow
+  normal travel if enough points remain. An exited piece earns its strength.
+  If the very first exit by either side is a Sentinel, that side wins immediately.
+  Otherwise, **two exits total**, even by different sides, end play on scores;
+  equal scores draw. Sentinel exiting second does not grant instant victory.
+- If either side has no active pieces (captured or exited), add each side's
+  strongest remaining active piece to its exit score, then compare scores.
+- After **200 individual moves**, compare exit scores. On equality, compare
+  the closest active piece's remaining row distance, then its base strength.
+  If these also tie, draw. This follows the public runtime even when equal
+  scores are nonzero; the prose rules only describe the no-score example.
+- Three consecutive repetitions of an entire even-length position sequence
+  draw. This is not simply three scattered occurrences of one position.
+  Active piece type/player/coordinates, turn and exited pieces identify positions.
+- The official text/runtime provides no outcome or passing rule for a player
+  with no legal action. This application displays **no legal move / blocked**,
+  offers a new game, and does not invent a winner, pass, or bot polling loop.
+
+## Authoritative sessions and bots
+
+One temporary GenServer per authenticated account uses the existing registry
+and dynamic supervisor, with 30-minute idle expiry. Every API call checks the
+account's current `traversal` permission. The client sends a generated terrain
+only when starting a game; the server validates shape, heights, all eight slopes
+and central symmetry. The server creates every piece, legal action and result.
+Moves include an unpredictable game ID and revision. Other accounts never select
+that session; stale, wrong-turn and illegal requests are rejected. Bot messages
+carry the same version and cannot act after replacement or game over. No persistence,
+multiplayer, LLM or new dependency is introduced.
+
+Easy chooses the highest immediate heuristic value. Medium anticipates one
+opponent reply (depth 2, beam 5, at most 70 searched nodes, 180 ms deadline).
+Hard adds its own next move (depth 3, beam 8, at most 360 searched nodes, 600 ms).
+All levels rank terminal wins/losses before positional values. The shared
+heuristic weights exit scores, strength/captures, progression, early Sentinel
+progression, terrain costs, adjacent support and immediate threats. Search uses
+alpha-beta pruning; legal generation itself is bounded to 6 pieces and 100 cells.
+The monotonic deadline begins before root ranking; a currently running bounded
+legal-generation/ranking operation may finish after the deadline. This is a
+bounded algorithm, not a hard real-time guarantee. No external calls are used.
+
+## Client and validation
+
+Click a blue piece for blue movement rings, red capture diamonds and green exit
+rings outside the board. The destination buttons provide the same actions and
+combat values for keyboard use. Drag/zoom does not trigger moves. Request
+cancellation, generation checks, disposed checks and timer cleanup prevent stale
+view callbacks; server revisions guard the game independently.
+
+Shapes are original Three.js solids following the official silhouettes:
+Explorer pentagonal pyramid (one apex), Vanguard quadrilateral wedge (two upper
+vertices), Sentinel triangular prism (three upper vertices). Colours identify
+sides; yellow marks selection. The approved seeded terrain generator is unchanged.
+
+Run `npm ci && npm run prepare:vendor && npm test`, `mix test`, then
+`mix install_minifiers && mix compile_front`. Elixir tests cover rules, the
+independent official corpus, tactical bots, budgets, session/version isolation
+and permission-protected API requests. Node tests cover terrain and closed
+piece geometry. Manually verify WebGL desktop/mobile: select/deselect, legal
+attack vs movement/exit, orbit vs click, keyboard actions, all difficulties,
+loading, terminal state and leaving/reopening the view. Browser validation must
+be reported separately from compilation and algorithmic tests.

@@ -222,7 +222,7 @@ async function startTraversal() {
     await api("/api/traversal");
     const module = await import("/traversal/view.js");
     if (version === traversalVersion && !traversalPage.hidden) {
-      traversalCleanup = module.mountTraversal(traversalPage);
+      traversalCleanup = module.mountTraversal(traversalPage, api);
     }
   } catch (_) {
     if (version === traversalVersion) status.textContent = "Plateau indisponible. Vérifiez vos droits et la compilation des assets, puis rouvrez Traversal.";
@@ -1612,3 +1612,4 @@ logoutButton.addEventListener("click", logout);
 
 renderMrWhitePlayerFields();
 restoreSession();
+

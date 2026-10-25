@@ -286,3 +286,12 @@ button:disabled { cursor: wait; opacity: .65; }
 .traversal-data summary { cursor: pointer; }
 .traversal-data table { width: 100%; text-align: center; border-collapse: collapse; margin-top: 1rem; }
 .traversal-data td, .traversal-data th { padding: .5rem; border: 1px solid #ffffff29; }
+
+
+.traversal-options { display: flex; flex-wrap: wrap; gap: .5rem; margin: .7rem 0; }
+.traversal-options button, #traversal-difficulty { padding: .45rem .65rem; color: #e2e8f0; background: #18283d; border: 1px solid #64748b; border-radius: .4rem; }
+.traversal-options button[aria-pressed="true"] { outline: 2px solid #ffe166; }
+.traversal-options .traversal-move { border: 2px solid #7dd3fc; }
+.traversal-options .traversal-attack { border: 2px solid #fb7185; }
+.traversal-options .traversal-exit { border: 2px solid #86efac; }
+.traversal-options button:disabled { opacity: .55; cursor: wait; }

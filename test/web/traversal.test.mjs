@@ -68,3 +68,30 @@ test('vendor preparation produces self-hosted modules with the Three.js licence'
   const licence = await readFile(new URL('../../web/assets/vendor/THREE-LICENSE.txt', import.meta.url), 'utf8');
   assert.match(licence, /MIT License/);
 });
+
+const shapeSource = await readFile(new URL('../../web/assets/traversal/pieces.js', import.meta.url), 'utf8');
+const { pieceShape } = await import(`data:text/javascript;base64,${Buffer.from(shapeSource).toString('base64')}`);
+
+test('official silhouettes have pentagonal/quadrilateral/triangular bases and 1/2/3 upper vertices', () => {
+  for (const [type, baseCount, tipCount] of [['explorer', 5, 1], ['vanguard', 4, 2], ['sentinel', 3, 3]]) {
+    const { vertices, triangles } = pieceShape(type);
+    assert.equal(vertices.filter(v => v[1] === 0).length, baseCount);
+    const top = Math.max(...vertices.map(v => v[1]));
+    assert.equal(vertices.filter(v => v[1] === top).length, tipCount);
+    const centre = vertices.reduce((sum, v) => sum.map((x, i) => x + v[i] / vertices.length), [0, 0, 0]);
+    const edges = new Map();
+    for (const face of triangles) {
+      assert.equal(new Set(face).size, 3);
+      const [a, b, c] = face.map(i => vertices[i]);
+      const u = b.map((x, i) => x - a[i]), v = c.map((x, i) => x - a[i]);
+      const normal = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+      assert.ok(normal.reduce((sum, x, i) => sum + x * ((a[i] + b[i] + c[i]) / 3 - centre[i]), 0) > 0, `${type} faces must point outwards`);
+      face.forEach((index, i) => {
+        assert.ok(vertices[index]?.every(Number.isFinite));
+        const edge = [index, face[(i + 1) % 3]].sort((a, b) => a - b).join(',');
+        edges.set(edge, (edges.get(edge) || 0) + 1);
+      });
+    }
+    assert.ok([...edges.values()].every(count => count === 2), `${type} must be a closed solid`);
+  }
+});

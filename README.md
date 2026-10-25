@@ -163,33 +163,28 @@ optionnel : il ne peut choisir que parmi les actions légales et est limité à 
 décisions PNJ par match. En cas de quota atteint, d'erreur ou de délai d'attente,
 l'algorithme local reprend immédiatement la main.
 
-### Valider le plateau Traversal
+### Jouer à Traversal
 
-Avec la permission `traversal` (ou `admin`), ouvrez **Traversal** dans le menu.
-Cette première étape est un prototype visuel : terrain 10 × 10 symétrique,
-hauteurs entières de 0 à 5, et six silhouettes indicatives par camp. Il n'y a
-pas encore de déplacements, combats, sauvegarde ni multijoueur.
+Avec la permission `traversal` (ou `admin`), ouvrez **Traversal**. Choisissez la
+difficulté du bot, une graine, puis **Nouvelle partie**. Vous jouez les bleus
+depuis la ligne 10. Cliquez une pièce pour afficher les déplacements bleus,
+captures rouges et sorties vertes ; les boutons sous le plateau proposent les
+mêmes actions au clavier. Glissez pour tourner, utilisez la molette/pincement
+pour zoomer ou les boutons vue dessus/reset. La difficulté s'applique à la
+prochaine partie ; celle-ci remplace la partie temporaire du compte.
 
-1. Conservez une graine et cliquez sur **Régénérer** : le relief reste identique.
-2. Changez la graine ou utilisez **Nouvelle graine** : un autre relief apparaît.
-3. Faites tourner le plateau en glissant ; zoomez à la molette ou au pincement.
-4. Comparez **Vue de dessus** et **Réinitialiser la vue**.
-5. Ouvrez **Vérifier les hauteurs entières** pour lire les 100 hauteurs.
+Le moteur Elixir est l'autorité sur les coups, combats, tours, sorties et fins.
+Les trois bots sont algorithmiques (aucun LLM) : choix immédiat, anticipation
+d'une réponse, recherche à trois demi-coups bornée. Les pièces suivent les
+silhouettes officielles : pyramide pentagonale, coin quadrilatère, prisme
+triangulaire. Le générateur varié et symétrique est conservé.
 
-Le relief combine du bruit interpolé à deux échelles, puis arrondit les hauteurs
-pour former des zones ouvertes, plateaux, crêtes et vallées moins réguliers.
-L'amplitude et les détails varient selon la graine ; chaque carte n'utilise pas
-forcément les six niveaux. Les ruptures sont limitées à 2, diagonales comprises.
-La symétrie centrale reste volontaire et répète le relief dans le camp opposé.
-Ce générateur remplace les pics en losange : les anciennes graines donnent un
-nouveau terrain, toujours reproductible avec cette version.
-
-Three.js `0.170.0` est verrouillé par `package-lock.json`. `npm ci` puis
-`npm run prepare:vendor` copient ses modules et sa licence dans les assets ;
-le navigateur ne contacte aucun CDN. Exécutez ces commandes avant la compilation
-du client, y compris en release. Les modules générés ne sont pas versionnés.
-Les tests du générateur et du vendor se lancent avec `npm test` après préparation.
-Le rendu nécessite WebGL ; un message explique son indisponibilité.
+Les [règles vérifiées, précisions, budgets et tests](docs/traversal.md) décrivent
+notamment le pouvoir Explorer, la charge Vanguard, les fins et le cas bloqué.
+Tests : `npm ci && npm run prepare:vendor && npm test`, puis `mix test` et
+`mix install_minifiers && mix compile_front`. Three.js `0.170.0`, seule dépendance
+ajoutée, est servi localement sans CDN. Le rendu nécessite WebGL. Une validation
+visuelle desktop/mobile reste distincte de la CI.
 
 ### Configurer l'application
 
@@ -360,7 +355,9 @@ Les routes JSON disponibles sont :
 | `POST /api/admin/users` | Cree un utilisateur ; permission `admin` requise. |
 | `PUT /api/admin/users/:user` | Met a jour les permissions et reset optionnellement le mot de passe ; permission `admin` requise. |
 | `DELETE /api/admin/users/:user` | Supprime un utilisateur ; permission `admin` requise. |
-| `GET /api/traversal` | Vérifie la permission `traversal` avant ouverture du prototype visuel. |
+| `GET /api/traversal` | État de la partie temporaire, coups légaux et état du bot ; permission `traversal`. |
+| `POST /api/traversal` | Nouvelle partie contre bot `easy`, `medium` ou `hard` sur terrain validé. |
+| `POST /api/traversal/move` | Coup humain validé avec identifiant de partie et révision ; réponse du bot automatique. |
 | `POST /api/table` | Cree ou recupere la table temporaire de l'utilisateur. |
 | `GET /api/table` | Retourne l'etat de la table. |
 | `GET /api/table/extract?n=10` | Exporte les mains recentes en Markdown, de 1 a 50 mains ; permission `llm` requise. |
@@ -432,3 +429,4 @@ gestionnaire de secrets pour les valeurs sensibles.
 L'API generique de token fournie par `html_handler` est desactivee : elle accepte
 un identifiant arbitraire. Toute nouvelle source d'identite doit authentifier
 l'utilisateur cote serveur puis appeler `GameSimulatorWeb.Auth.issue_token/1`.
+

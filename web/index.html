@@ -248,16 +248,18 @@
 
         <section id="traversal-page" class="poker-page content-page" hidden aria-labelledby="traversal-title">
           <header class="poker-header"><div class="page-heading">
-            <p class="eyebrow">Prototype · étape 1</p>
+            <p class="eyebrow">Jeu de stratégie · humain contre bot</p>
             <h1 id="traversal-title">Traversal</h1>
-            <p class="intro">Un terrain à explorer. Validez le relief et les silhouettes avant les règles de jeu.</p>
+            <p class="intro">Traversez le terrain, capturez ou faites sortir vos pièces. Vous jouez les bleus depuis la ligne 10.</p>
           </div></header>
           <div class="traversal-toolbar">
             <form id="traversal-form">
               <label for="traversal-seed">Graine du terrain</label>
               <div class="traversal-seed-actions">
                 <input id="traversal-seed" value="traversal-001" maxlength="80" required />
-                <button class="leave-table-button" type="submit">Régénérer</button>
+                <label for="traversal-difficulty">Bot</label>
+                <select id="traversal-difficulty"><option value="easy">Facile</option><option value="medium" selected>Moyen</option><option value="hard">Difficile</option></select>
+                <button class="leave-table-button" type="submit">Nouvelle partie</button>
                 <button id="traversal-new" class="leave-table-button" type="button">Nouvelle graine</button>
               </div>
             </form>
@@ -269,7 +271,12 @@
           <div id="traversal-canvas" class="traversal-canvas"></div>
           <p id="traversal-status" class="traversal-status" role="status" aria-live="polite"></p>
           <p class="traversal-help">Glisser pour tourner · molette ou pincement pour zoomer · un doigt pour tourner sur mobile.</p>
-          <p class="traversal-help">Bleu et ambre : deux camps, six silhouettes chacun (cône, sphère, tour). Placement indicatif ; déplacements et combats à venir.</p>
+          <p class="traversal-help">Explorer : 5 PM / force 1, pyramide à 1 pointe · Vanguard : 4 PM / force 2, arête à 2 sommets · Sentinel : 3 PM / force 3, prisme à 3 sommets.</p>
+          <p class="traversal-help">Cliquez une pièce bleue : <strong style="color:#7dd3fc">bleu = déplacement</strong> · <strong style="color:#fb7185">rouge = capture légale</strong> · <strong style="color:#86efac">vert = sortie</strong>. Recliquez pour désélectionner. Les contours indiquent les destinations.</p>
+          <p id="traversal-selection" class="traversal-help"></p>
+          <div id="traversal-pieces" class="traversal-options" aria-label="Choisir une pièce"></div>
+          <div id="traversal-actions" class="traversal-options" aria-label="Destinations légales"></div>
+          <details class="traversal-data"><summary>Règles de la partie</summary><p>Marche orthogonale avec virages : 1 + différence absolue de hauteur par case, sans traverser une pièce. Une capture termine le tour et exige attaque ≥ défense. Hauteur comparée au départ : +1 en surplomb, −1 en contrebas. Soutien : somme des forces alliées adjacentes à la cible ; défense : +1 par allié adjacent. Vanguard : +1 si le coût minimal de l’attaque vaut exactement 4. Explorer : un déplacement diagonal ou un bond de deux cases avec intermédiaire libre, ignorant le relief, sans combinaison avec la marche. Ces pouvoirs permettent aussi capture et sortie.</p><p>Sortie par le bord opposé : 1 PM depuis le dernier rang. Les pièces sorties rapportent leur force. La première sortie gagne immédiatement si c’est un Sentinel ; sinon, deux sorties au total terminent la partie au score. Fin également après 200 coups, répétition de séquence trois fois, ou épuisement des pièces actives d’un camp. Aucun coup légal : partie signalée bloquée, sans victoire ni passage inventés. Les bots utilisent uniquement des algorithmes locaux au serveur. Une nouvelle partie remplace la partie temporaire.</p></details>
           <details class="traversal-data"><summary>Vérifier les hauteurs entières</summary>
             <table><caption>Relief 10 × 10 · lignes 1–10, colonnes A–J</caption><thead><tr><th scope="col">Ligne</th><th scope="col">A</th><th scope="col">B</th><th scope="col">C</th><th scope="col">D</th><th scope="col">E</th><th scope="col">F</th><th scope="col">G</th><th scope="col">H</th><th scope="col">I</th><th scope="col">J</th></tr></thead><tbody id="traversal-heights"></tbody></table>
           </details>
@@ -395,3 +402,4 @@
     <script src="/js/app.js"></script>
   </body>
 </html>
+
