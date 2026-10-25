@@ -56,6 +56,7 @@ and dynamic supervisor, with 30-minute idle expiry. Every API call checks the
 account's current `traversal` permission. The client sends a generated terrain
 only when starting a game; the server validates shape, heights, all eight slopes
 and central symmetry. The server creates every piece, legal action and result.
+Seed metadata (at most 80 characters) is retained for reopening the view.
 Moves include an unpredictable game ID and revision. Other accounts never select
 that session; stale, wrong-turn and illegal requests are rejected. Bot messages
 carry the same version and cannot act after replacement or game over. No persistence,

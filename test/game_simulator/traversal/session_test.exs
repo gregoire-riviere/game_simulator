@@ -13,7 +13,8 @@ defmodule GameSimulator.Traversal.SessionTest do
     end)
     assert {:error, :invalid_game} = Session.request(user, {:new, heights, "llm"})
     assert {:ok, %{game: nil}} = Session.request(other, :get)
-    {:ok, initial} = Session.request(user, {:new, heights, "easy"})
+    {:ok, initial} = Session.request(user, {:new, heights, "easy", "test-seed"})
+    assert initial.seed == "test-seed"
     [move | _] = initial.legal
     params = %{"game_id" => initial.game_id, "revision" => initial.revision, "piece" => move.piece, "row" => move.row, "col" => move.col}
     assert {:error, :no_game} = Session.request(other, {:move, params})
@@ -42,5 +43,10 @@ defmodule GameSimulator.Traversal.SessionTest do
     send(pid, {:bot, "old-game", 0})
     send(pid, {:bot, state.game_id, 99})
     assert {:ok, %{revision: 0}} = Session.request(user, :get)
+    :sys.replace_state(pid, fn current -> %{current | game: %{current.game | turn: 2, result: %{winner: 1, reason: "test"}}} end)
+    send(pid, {:bot, state.game_id, 0})
+    {:ok, final} = Session.request(user, :get)
+    assert final.game.moves == 0
+    assert final.game.result.winner == 1
   end
 end

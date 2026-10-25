@@ -25,9 +25,10 @@ defmodule GameSimulator.Traversal.Session do
   def init(_user), do: {:ok, nil, 1_800_000}
 
   def handle_call(:get, _from, state), do: {:reply, {:ok, public(state)}, state, 1_800_000}
-  def handle_call({:new, board, difficulty}, _from, state) do
-    if Game.valid_board?(board) and difficulty in ["easy", "medium", "hard"] do
-      next = %{game: Game.new(board), difficulty: difficulty, revision: 0, id: Base.url_encode64(:crypto.strong_rand_bytes(18), padding: false)}
+  def handle_call({:new, board, difficulty}, from, state), do: handle_call({:new, board, difficulty, nil}, from, state)
+  def handle_call({:new, board, difficulty, seed}, _from, state) do
+    if Game.valid_board?(board) and difficulty in ["easy", "medium", "hard"] and (seed == nil or (is_binary(seed) and String.length(seed) <= 80)) do
+      next = %{game: Game.new(board), seed: seed, difficulty: difficulty, revision: 0, id: Base.url_encode64(:crypto.strong_rand_bytes(18), padding: false)}
       {:reply, {:ok, public(next)}, next, 1_800_000}
     else
       {:reply, {:error, :invalid_game}, state, 1_800_000}
@@ -62,6 +63,6 @@ defmodule GameSimulator.Traversal.Session do
   def public(state) do
     actions = Game.actions(state.game)
     game = Map.drop(state.game, [:history])
-    %{game: game, game_id: state.id, revision: state.revision, difficulty: state.difficulty, legal: if(game.turn == 1, do: actions, else: []), thinking: game.turn == 2 and game.result == nil and actions != [], blocked: game.result == nil and actions == []}
+    %{game: game, seed: state.seed, game_id: state.id, revision: state.revision, difficulty: state.difficulty, legal: if(game.turn == 1, do: actions, else: []), thinking: game.turn == 2 and game.result == nil and actions != [], blocked: game.result == nil and actions == []}
   end
 end

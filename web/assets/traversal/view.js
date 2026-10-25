@@ -16,7 +16,7 @@ export function mountTraversal(page, api) {
   const pieceOptions = page.querySelector('#traversal-pieces');
   const actionOptions = page.querySelector('#traversal-actions');
   const abort = new AbortController();
-  let state = null, selected = null, busy = false, disposed = false, poll = null, generation = 0;
+  let state = null, selected = null, busy = false, disposed = false, poll = null, generation = 0, errorMessage = '';
   let renderer;
   try {
     renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -36,7 +36,7 @@ export function mountTraversal(page, api) {
   controls.maxDistance = 32;
   controls.maxPolarAngle = Math.PI / 2.05;
   controls.target.set(0, 1, 0);
-  const render = () => renderer.render(scene, camera);
+  const render = () => { if (!disposed) renderer.render(scene, camera); };
   controls.addEventListener('change', render);
   scene.add(new THREE.HemisphereLight(0xe6f5ff, 0x475569, 2.8));
   const light = new THREE.DirectionalLight(0xffffff, 3);
@@ -150,7 +150,7 @@ export function mountTraversal(page, api) {
     const reasonNames = { first_sentinel: 'premier Sentinel sorti', two_exits: 'deux pièces sorties', no_active_pieces: 'un camp sans pièce active', move_limit_score: 'limite de 200 coups, score', move_limit_advancement: 'limite de 200 coups, progression puis force', threefold_repetition: 'répétition de séquence trois fois' };
     const difficulties = { easy: 'facile', medium: 'moyen', hard: 'difficile' };
     const outcome = result ? `${result.winner === 0 ? 'Match nul' : result.winner === 1 ? 'Vous avez gagné' : 'Le bot a gagné'} : ${reasonNames[result.reason]}.` : state?.blocked ? 'Aucun coup légal : partie bloquée. Vous pouvez lancer une nouvelle partie.' : busy || state?.thinking ? 'Le bot réfléchit…' : 'À vous de jouer — sélectionnez une pièce bleue.';
-    status.textContent = game ? `${outcome} Score vous ${game.scores[0]} / bot ${game.scores[1]} · coup ${game.moves}/200 · bot ${difficulties[state.difficulty]}.` : 'Choisissez la difficulté, puis démarrez une nouvelle partie.';
+    status.textContent = errorMessage + (game ? `${outcome} Score vous ${game.scores[0]} / bot ${game.scores[1]} · coup ${game.moves}/200 · bot ${difficulties[state.difficulty]}.` : 'Choisissez la difficulté, puis démarrez une nouvelle partie.');
     const piece = game?.pieces.find(p => p.id === selected);
     selection.textContent = piece ? `${piece.type} · ${String.fromCharCode(65 + piece.col)}${piece.row + 1} · ${piece.movement} PM · force ${piece.strength}.` : '';
     pieceOptions.replaceChildren();
@@ -188,17 +188,20 @@ export function mountTraversal(page, api) {
       const next = await api('/api/traversal', { signal: abort.signal });
       if (disposed || version !== generation) return;
       state = next;
+      errorMessage = '';
+      if (typeof state.seed === 'string') seed.value = state.seed;
       selected = null;
       rebuild();
       if (state.thinking) poll = setTimeout(refresh, 250);
     } catch (error) {
-      if (!disposed) { status.textContent = 'Chargement impossible. Rouvrez Traversal pour récupérer la partie.'; }
+      if (!disposed && version === generation) { errorMessage = 'Chargement impossible. Rouvrez Traversal pour récupérer la partie. '; updateStatus(); }
     }
   }
 
   async function play(move) {
     if (busy || !state || state.thinking || state.game.result) return;
     generation += 1;
+    errorMessage = '';
     busy = true; updateStatus();
     try {
       const next = await api('/api/traversal/move', { method: 'POST', signal: abort.signal, body: JSON.stringify({ game_id: state.game_id, revision: state.revision, piece: move.piece, row: move.row, col: move.col }) });
@@ -206,7 +209,7 @@ export function mountTraversal(page, api) {
       state = next; selected = null;
       if (state.thinking) poll = setTimeout(refresh, 200);
     } catch (error) {
-      if (!disposed) { await refresh(); status.textContent = 'Action refusée ou connexion interrompue. État actualisé.'; }
+      if (!disposed) { await refresh(); errorMessage = 'Action refusée ou connexion interrompue. État actualisé. '; }
     } finally {
       busy = false;
       if (!disposed) rebuild();
@@ -217,12 +220,13 @@ export function mountTraversal(page, api) {
     if (busy || disposed) return;
     clearTimeout(poll);
     generation += 1;
+    errorMessage = '';
     busy = true; updateStatus();
     try {
-      const next = await api('/api/traversal', { method: 'POST', signal: abort.signal, body: JSON.stringify({ board: generateBoard(seed.value), difficulty: difficulty.value }) });
+      const next = await api('/api/traversal', { method: 'POST', signal: abort.signal, body: JSON.stringify({ board: generateBoard(seed.value), difficulty: difficulty.value, seed: seed.value }) });
       if (!disposed) { state = next; selected = null; }
     } catch (error) {
-      if (!disposed) status.textContent = 'Impossible de créer la partie. Vérifiez votre connexion.';
+      if (!disposed) errorMessage = 'Impossible de créer la partie. Vérifiez votre connexion. ';
     } finally {
       busy = false;
       if (!disposed) rebuild();

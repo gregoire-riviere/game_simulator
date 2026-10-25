@@ -277,7 +277,7 @@ defmodule GameSimulatorWeb.Endpoint do
 
   post "/api/traversal" do
     authenticated(conn, "traversal", fn conn, account ->
-      traversal_reply(conn, GameSimulator.Traversal.Session.request(account.username, {:new, conn.body_params["board"], conn.body_params["difficulty"]}))
+      traversal_reply(conn, GameSimulator.Traversal.Session.request(account.username, {:new, conn.body_params["board"], conn.body_params["difficulty"], conn.body_params["seed"]}))
     end)
   end
 
