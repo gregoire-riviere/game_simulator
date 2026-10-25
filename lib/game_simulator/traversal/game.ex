@@ -16,12 +16,14 @@ defmodule GameSimulator.Traversal.Game do
   end
   def valid_board?(_board), do: false
 
-  def new(board) do
+  def new(board, variant \\ "classic", seed \\ nil) do
     pieces = for player <- [1, 2], {type, index} <- Enum.with_index(@types) do
       Map.merge(stats(type), %{id: "#{player}-#{index}", type: type, player: player, row: if(player == 1, do: 9, else: 0), col: index + 2, status: "active"})
     end
-    %{board: board, pieces: pieces, turn: 1, moves: 0, exited: [], scores: [0, 0], result: nil, history: []}
+    %{board: board, variant: variant, forests: GameSimulator.Traversal.Variant.forests(variant, seed), pieces: pieces, turn: 1, moves: 0, exited: [], scores: [0, 0], result: nil, history: []}
   end
+
+  def forest?(game, row, col), do: Enum.any?(Map.get(game, :forests, []), &(&1.row == row and &1.col == col))
 
   def active(game), do: Enum.filter(game.pieces, &(&1.status == "active"))
   def occupant(game, row, col), do: Enum.find(game.pieces, &(&1.status == "active" and &1.row == row and &1.col == col))
@@ -42,7 +44,10 @@ defmodule GameSimulator.Traversal.Game do
   def walk(_game, _piece, [], empty, enemies), do: {empty, enemies}
   def walk(game, piece, queue, empty, enemies) do
     [{cost, row, col} | rest] = Enum.sort(queue)
-    if cost > Map.fetch!(empty, {row, col}) do
+    # A forest is a destination, never a walking waypoint. Starting there
+    # permits exactly one normal step; positive costs preserve minimal charge cost.
+    stopped = cost > 0 and (forest?(game, row, col) or forest?(game, piece.row, piece.col))
+    if stopped or cost > Map.fetch!(empty, {row, col}) do
       walk(game, piece, rest, empty, enemies)
     else
       {next, empty, enemies} = Enum.reduce(neighbours(row, col), {rest, empty, enemies}, fn {r, c}, {q, cells, attacks} ->
@@ -87,13 +92,14 @@ defmodule GameSimulator.Traversal.Game do
         strength = combat(game, piece, occupant(game, r, c), cost)
         if strength.attack >= strength.defence, do: [Map.merge(action(piece, r, c, cost, "attack"), strength)], else: []
       end)
-      exits = for {{r, c}, cost} <- empty, r == last_row(piece.player), cost < piece.movement, do: action(piece, exit_row(piece.player), c, cost + 1, "exit")
+      exits = for {{r, c}, cost} <- empty, r == last_row(piece.player), cost < piece.movement,
+        (cost == 0 or (not forest?(game, r, c) and not forest?(game, piece.row, piece.col))), do: action(piece, exit_row(piece.player), c, cost + 1, "exit")
       specials = if piece.type == "explorer", do: special_actions(game, piece, empty, enemies), else: []
       (moves ++ attacks ++ exits ++ specials) |> Enum.uniq_by(&{&1.row, &1.col}) |> Enum.sort_by(&{&1.row, &1.col})
     end
   end
 
-  def special_actions(game, piece, empty, enemies) do
+  def special_actions(game, piece, _empty, _enemies) do
     Enum.flat_map([{-1, -1}, {-1, 1}, {1, -1}, {1, 1}, {-2, 0}, {2, 0}, {0, -2}, {0, 2}], fn {dr, dc} ->
       r = piece.row + dr
       c = piece.col + dc
@@ -103,7 +109,7 @@ defmodule GameSimulator.Traversal.Game do
       cond do
         blocked or c not in 0..9 -> []
         r == exit_row(piece.player) or (piece.player == 1 and r == -2) or (piece.player == 2 and r == 11) -> [action(piece, exit_row(piece.player), c, piece.movement, "exit", true)]
-        not inside?(r, c) or Map.has_key?(empty, {r, c}) or Map.has_key?(enemies, {r, c}) -> []
+        not inside?(r, c) -> []
         true ->
           target = occupant(game, r, c)
           cond do

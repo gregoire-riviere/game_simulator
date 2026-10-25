@@ -9,7 +9,7 @@ defmodule GameSimulator.Traversal.Bot do
   def choose(game, difficulty) do
     budget = limits(difficulty)
     deadline = System.monotonic_time(:millisecond) + budget.milliseconds
-    budget = Map.put(budget, :terrain, terrain(game.board))
+    budget = Map.put(budget, :terrain, terrain(game.board, Map.get(game, :forests, [])))
     options = ranked(game, game.turn, budget.terrain)
     options = if difficulty == "easy", do: options, else: defend(game, options, deadline)
     case options do
@@ -33,7 +33,7 @@ defmodule GameSimulator.Traversal.Bot do
 
   def exhausted?(nodes, deadline), do: nodes <= 0 or System.monotonic_time(:millisecond) >= deadline
 
-  def ranked(game, player), do: ranked(game, player, terrain(game.board))
+  def ranked(game, player), do: ranked(game, player, terrain(game.board, Map.get(game, :forests, [])))
   def ranked(game, player, terrain) do
     Game.actions(game)
     # An exited piece is inactive: its exit column has no strategic consequence.
@@ -72,29 +72,30 @@ defmodule GameSimulator.Traversal.Bot do
 
   # Reverse Dijkstra ignores occupants and estimates the terrain cost to exit.
   # This fixed 100-cell field is computed once per side, then reused throughout search.
-  def terrain(board) do
+  def terrain(board, forests \\ []) do
     Map.new([1, 2], fn player ->
       frontier = for col <- 0..9, do: {1, Game.last_row(player), col}
       distances = Map.new(frontier, fn {cost, row, col} -> {{row, col}, cost} end)
-      {player, terrain_walk(board, frontier, distances)}
+      {player, terrain_walk(board, frontier, distances, forests)}
     end)
   end
 
-  def terrain_walk(_board, [], distances), do: distances
-  def terrain_walk(board, frontier, distances) do
+  def terrain_walk(_board, [], distances, _forests), do: distances
+  def terrain_walk(board, frontier, distances, forests) do
     [{cost, row, col} | rest] = Enum.sort(frontier)
     if cost > Map.fetch!(distances, {row, col}) do
-      terrain_walk(board, rest, distances)
+      terrain_walk(board, rest, distances, forests)
     else
       {frontier, distances} = Enum.reduce(Game.neighbours(row, col), {rest, distances}, fn {r, c}, {queue, known} ->
         if Game.inside?(r, c) do
-          next = cost + 1 + abs(Game.height(board, row, col) - Game.height(board, r, c))
+          next = cost + 1 + abs(Game.height(board, row, col) - Game.height(board, r, c)) +
+            if(Enum.any?(forests, &(&1.row == row and &1.col == col)), do: 2, else: 0)
           if next < Map.get(known, {r, c}, 1_000), do: {[{next, r, c} | queue], Map.put(known, {r, c}, next)}, else: {queue, known}
         else
           {queue, known}
         end
       end)
-      terrain_walk(board, frontier, distances)
+      terrain_walk(board, frontier, distances, forests)
     end
   end
 
@@ -126,7 +127,7 @@ defmodule GameSimulator.Traversal.Bot do
   end
 
   # Terminal outcomes dominate every positional term, including a first Sentinel exit.
-  def evaluate(game, player), do: evaluate(game, player, terrain(game.board))
+  def evaluate(game, player), do: evaluate(game, player, terrain(game.board, Map.get(game, :forests, [])))
   def evaluate(%{result: %{winner: winner}}, player, _terrain) do
     cond do winner == player -> 1_000_000; winner == 0 -> 0; true -> -1_000_000 end
   end

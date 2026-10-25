@@ -1,7 +1,7 @@
 defmodule GameSimulator.Traversal.Session do
   @moduledoc "One temporary authoritative game per authenticated user, isolated from other tables."
   use GenServer
-  alias GameSimulator.Traversal.{Game, Bot}
+  alias GameSimulator.Traversal.{Game, Bot, Variant}
 
   def start_link(user), do: GenServer.start_link(__MODULE__, user, name: via(user))
   def via(user), do: {:via, Registry, {GameSimulator.TableRegistry, {:traversal, user}}}
@@ -26,9 +26,10 @@ defmodule GameSimulator.Traversal.Session do
 
   def handle_call(:get, _from, state), do: {:reply, {:ok, public(state)}, state, 1_800_000}
   def handle_call({:new, board, difficulty}, from, state), do: handle_call({:new, board, difficulty, nil}, from, state)
-  def handle_call({:new, board, difficulty, seed}, _from, state) do
-    if Game.valid_board?(board) and difficulty in ["easy", "medium", "hard"] and (seed == nil or (is_binary(seed) and String.length(seed) <= 80)) do
-      next = %{game: Game.new(board), seed: seed, difficulty: difficulty, revision: 0, id: Base.url_encode64(:crypto.strong_rand_bytes(18), padding: false)}
+  def handle_call({:new, board, difficulty, seed}, from, state), do: handle_call({:new, board, difficulty, seed, "classic"}, from, state)
+  def handle_call({:new, board, difficulty, seed, variant}, _from, state) do
+    if Game.valid_board?(board) and difficulty in ["easy", "medium", "hard"] and Variant.valid?(variant, seed) do
+      next = %{game: Game.new(board, variant, seed), seed: seed, difficulty: difficulty, revision: 0, id: Base.url_encode64(:crypto.strong_rand_bytes(18), padding: false)}
       {:reply, {:ok, public(next)}, next, 1_800_000}
     else
       {:reply, {:error, :invalid_game}, state, 1_800_000}

@@ -105,3 +105,25 @@ piece geometry. Manually verify WebGL desktop/mobile: select/deselect, legal
 attack vs movement/exit, orbit vs click, keyboard actions, all difficulties,
 loading, terminal state and leaving/reopening the view. Browser validation must
 be reported separately from compilation and algorithmic tests.
+
+## Variante Forêts
+
+Le sélecteur Classique / Forêts s’applique à la nouvelle partie. Le serveur conserve
+la variante et génère depuis la graine (80 caractères maximum) exactement deux
+forêts carrées 2 × 2, distinctes et symétriques par rotation de 180°. Les cases
+restent intérieures, hors départs et bords de sortie. Le relief approuvé est inchangé.
+La variante classique et les anciennes requêtes sans variante restent compatibles.
+
+Entrer dans une forêt termine immédiatement le tour : elle peut être une destination,
+jamais une étape intermédiaire de marche. Depuis une forêt, la marche normale est
+limitée à un seul pas orthogonal, pour déplacement ou capture ; une sortie directe
+est possible si la pièce commence sur le dernier rang. Le relief, le combat et les
+soutiens ne changent pas. La charge Vanguard utilise toujours le vrai coût minimal.
+Explorer conserve sa diagonale et son saut cardinal de deux cases comme action unique,
+pour déplacement, capture ou sortie ; une forêt vide ne bloque pas la case sautée,
+une pièce la bloque. Ces pouvoirs ne se combinent pas avec la marche.
+
+Les trois bots choisissent exclusivement parmi les actions légales du moteur ; leur
+estimation de distance ajoute un coût de 2 PM par entrée en forêt, approximation du
+ralentissement sans modifier les coûts réels ni la recherche bornée. Les arbres
+sont décoratifs, hors raycast, et les cases « F » sont aussi lisibles dans la table.

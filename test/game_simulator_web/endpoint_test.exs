@@ -117,9 +117,21 @@ defmodule GameSimulatorWeb.EndpointTest do
       |> then(&Endpoint.call(&1, Endpoint.init([])))
     end
     assert request.("/api/traversal", %{board: [[6]], difficulty: "easy"}, token_a).status == 422
+    for params <- [%{variant: "unknown", seed: "seed"}, %{variant: "forests"}, %{variant: "forests", seed: String.duplicate("s", 81)}] do
+      assert request.("/api/traversal", Map.merge(%{board: board, difficulty: "easy"}, params), token_a).status == 422
+    end
+    # Client-supplied arbitrary cells are never trusted: the server derives patches.
+    forest = request.("/api/traversal", %{board: board, difficulty: "easy", variant: "forests", seed: "api-seed", forests: [%{row: 0, col: 0}]}, token_a)
+    assert forest.status == 200
+    forest_data = Poison.decode!(forest.resp_body)
+    assert forest_data["game"]["variant"] == "forests"
+    expected = GameSimulator.Traversal.Variant.forests("forests", "api-seed") |> Poison.encode!() |> Poison.decode!()
+    assert forest_data["game"]["forests"] == expected
     state = request.("/api/traversal", %{board: board, difficulty: "easy"}, token_a)
     assert state.status == 200
     data = Poison.decode!(state.resp_body)
+    assert data["game"]["variant"] == "classic"
+    assert data["game"]["forests"] == []
     [move | _] = data["legal"]
     params = Map.merge(move, %{"game_id" => data["game_id"], "revision" => data["revision"]})
     assert request.("/api/traversal/move", params, token_b).status == 422

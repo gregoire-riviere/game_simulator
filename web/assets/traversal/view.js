@@ -12,6 +12,7 @@ export function mountTraversal(page, api) {
   const reset = page.querySelector('#traversal-reset');
   const top = page.querySelector('#traversal-top');
   const difficulty = page.querySelector('#traversal-difficulty');
+  const variant = page.querySelector('#traversal-variant');
   const selection = page.querySelector('#traversal-selection');
   const pieceOptions = page.querySelector('#traversal-pieces');
   const actionOptions = page.querySelector('#traversal-actions');
@@ -71,6 +72,18 @@ export function mountTraversal(page, api) {
     terrain.add(sprite);
   }
 
+  const forestAt = (row, col) => (state?.game?.forests || []).some(cell => cell.row === row && cell.col === col);
+  function trees(x, z, height) {
+    // Corner trees leave the central piece and destination ring visible.
+    for (const [dx, dz] of [[-0.34, -0.34], [0.34, 0.34]]) {
+      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.035, 0.14, 5), new THREE.MeshStandardMaterial({ color: 0x755438 }));
+      trunk.position.set(x - 4.5 + dx, height + 0.07, z - 4.5 + dz);
+      const crown = new THREE.Mesh(new THREE.ConeGeometry(0.105, 0.26, 5), new THREE.MeshStandardMaterial({ color: 0x47a16a, roughness: 0.9 }));
+      crown.position.set(x - 4.5 + dx, height + 0.23, z - 4.5 + dz);
+      terrain.add(trunk, crown);
+    }
+    // These decorative meshes never enter the raycast targets.
+  }
   const targets = [];
   function rebuild() {
     scene.remove(terrain);
@@ -89,6 +102,7 @@ export function mountTraversal(page, api) {
         tile.userData = { row: z, col: x };
         targets.push(tile);
         terrain.add(tile);
+        if (forestAt(z, x)) trees(x, z, thickness);
         const playerPiece = state?.game?.pieces.find(p => p.status === 'active' && p.row === z && p.col === x);
         if (playerPiece) {
           const shape = pieceShape(playerPiece.type);
@@ -128,9 +142,10 @@ export function mountTraversal(page, api) {
       header.scope = 'row';
       header.textContent = z + 1;
       tr.append(header);
-      row.forEach(height => {
+      row.forEach((height, x) => {
         const td = document.createElement('td');
-        td.textContent = height;
+        td.textContent = `${height}${forestAt(z, x) ? " F" : ""}`;
+        if (forestAt(z, x)) td.setAttribute("aria-label", `Hauteur ${height}, forêt`);
         tr.append(td);
       });
       body.append(tr);
@@ -150,7 +165,7 @@ export function mountTraversal(page, api) {
     const reasonNames = { first_sentinel: 'premier Sentinel sorti', two_exits: 'deux pièces sorties', no_active_pieces: 'un camp sans pièce active', move_limit_score: 'limite de 200 coups, score', move_limit_advancement: 'limite de 200 coups, progression puis force', threefold_repetition: 'répétition de séquence trois fois' };
     const difficulties = { easy: 'facile', medium: 'moyen', hard: 'difficile' };
     const outcome = result ? `${result.winner === 0 ? 'Match nul' : result.winner === 1 ? 'Vous avez gagné' : 'Le bot a gagné'} : ${reasonNames[result.reason]}.` : state?.blocked ? 'Aucun coup légal : partie bloquée. Vous pouvez lancer une nouvelle partie.' : busy || state?.thinking ? 'Le bot réfléchit…' : 'À vous de jouer — sélectionnez une pièce bleue.';
-    status.textContent = errorMessage + (game ? `${outcome} Score vous ${game.scores[0]} / bot ${game.scores[1]} · coup ${game.moves}/200 · bot ${difficulties[state.difficulty]}.` : 'Choisissez la difficulté, puis démarrez une nouvelle partie.');
+    status.textContent = errorMessage + (game ? `${outcome} Score vous ${game.scores[0]} / bot ${game.scores[1]} · coup ${game.moves}/200 · bot ${difficulties[state.difficulty]} · ${game.variant === "forests" ? "Forêts" : "Classique"}.` : 'Choisissez la difficulté et la variante, puis démarrez une nouvelle partie.');
     const piece = game?.pieces.find(p => p.id === selected);
     selection.textContent = piece ? `${piece.type} · ${String.fromCharCode(65 + piece.col)}${piece.row + 1} · ${piece.movement} PM · force ${piece.strength}.` : '';
     pieceOptions.replaceChildren();
@@ -190,6 +205,7 @@ export function mountTraversal(page, api) {
       state = next;
       errorMessage = '';
       if (typeof state.seed === 'string') seed.value = state.seed;
+      if (state.game) { variant.value = state.game.variant || 'classic'; difficulty.value = state.difficulty; }
       selected = null;
       rebuild();
       if (state.thinking) poll = setTimeout(refresh, 250);
@@ -223,7 +239,7 @@ export function mountTraversal(page, api) {
     errorMessage = '';
     busy = true; updateStatus();
     try {
-      const next = await api('/api/traversal', { method: 'POST', signal: abort.signal, body: JSON.stringify({ board: generateBoard(seed.value), difficulty: difficulty.value, seed: seed.value }) });
+      const next = await api('/api/traversal', { method: 'POST', signal: abort.signal, body: JSON.stringify({ board: generateBoard(seed.value), difficulty: difficulty.value, seed: seed.value, variant: variant.value }) });
       if (!disposed) { state = next; selected = null; }
     } catch (error) {
       if (!disposed) errorMessage = 'Impossible de créer la partie. Vérifiez votre connexion. ';
