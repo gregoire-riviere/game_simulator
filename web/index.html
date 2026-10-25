@@ -47,6 +47,10 @@
               <span aria-hidden="true">◎</span>
               <span class="nav-link-text">Mr. White</span>
             </button>
+            <button id="traversal-nav" class="nav-link" type="button" title="Traversal" data-view="traversal" hidden>
+              <span aria-hidden="true">▧</span>
+              <span class="nav-link-text">Traversal</span>
+            </button>
             <p id="admin-nav-label" class="nav-section-label" hidden>Administration</p>
             <button id="admin-nav" class="nav-link" type="button" title="Utilisateurs" data-view="admin" hidden>
               <span aria-hidden="true">⚙</span>
@@ -242,6 +246,35 @@
           </section>
         </section>
 
+        <section id="traversal-page" class="poker-page content-page" hidden aria-labelledby="traversal-title">
+          <header class="poker-header"><div class="page-heading">
+            <p class="eyebrow">Prototype · étape 1</p>
+            <h1 id="traversal-title">Traversal</h1>
+            <p class="intro">Un terrain à explorer. Validez le relief et les silhouettes avant les règles de jeu.</p>
+          </div></header>
+          <div class="traversal-toolbar">
+            <form id="traversal-form">
+              <label for="traversal-seed">Graine du terrain</label>
+              <div class="traversal-seed-actions">
+                <input id="traversal-seed" value="traversal-001" maxlength="80" required />
+                <button class="leave-table-button" type="submit">Régénérer</button>
+                <button id="traversal-new" class="leave-table-button" type="button">Nouvelle graine</button>
+              </div>
+            </form>
+            <div class="traversal-camera">
+              <button id="traversal-top" class="leave-table-button" type="button">Vue de dessus</button>
+              <button id="traversal-reset" class="leave-table-button" type="button">Réinitialiser la vue</button>
+            </div>
+          </div>
+          <div id="traversal-canvas" class="traversal-canvas"></div>
+          <p id="traversal-status" class="traversal-status" role="status" aria-live="polite"></p>
+          <p class="traversal-help">Glisser pour tourner · molette ou pincement pour zoomer · un doigt pour tourner sur mobile.</p>
+          <p class="traversal-help">Bleu et ambre : deux camps, six silhouettes chacun (cône, sphère, tour). Placement indicatif ; déplacements et combats à venir.</p>
+          <details class="traversal-data"><summary>Vérifier les hauteurs entières</summary>
+            <table><caption>Relief 10 × 10 · lignes 1–10, colonnes A–J</caption><thead><tr><th scope="col">Ligne</th><th scope="col">A</th><th scope="col">B</th><th scope="col">C</th><th scope="col">D</th><th scope="col">E</th><th scope="col">F</th><th scope="col">G</th><th scope="col">H</th><th scope="col">I</th><th scope="col">J</th></tr></thead><tbody id="traversal-heights"></tbody></table>
+          </details>
+        </section>
+
         <section id="mr-white-page" class="poker-page content-page" hidden aria-labelledby="mr-white-title">
           <header class="poker-header">
             <div class="page-heading">
@@ -308,6 +341,7 @@
                 <label><input name="permissions" type="checkbox" value="poker" checked /> Poker</label>
                 <label><input name="permissions" type="checkbox" value="belote" /> Belote</label>
                 <label><input name="permissions" type="checkbox" value="mr_white" /> Mr. White</label>
+                <label><input name="permissions" type="checkbox" value="traversal" /> Traversal</label>
                 <label><input name="permissions" type="checkbox" value="llm" /> LLM</label>
               </fieldset>
               <button class="primary-button" type="submit">Créer <span aria-hidden="true">→</span></button>

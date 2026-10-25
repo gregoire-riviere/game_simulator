@@ -51,6 +51,8 @@ cd game_simulator
 mix deps.get
 cp .env.example .env
 mix install_minifiers
+npm ci
+npm run prepare:vendor
 mix compile_front
 mix run --no-halt
 ```
@@ -177,6 +179,8 @@ Build and start a release:
 
 ```sh
 MIX_ENV=prod mix deps.get
+npm ci
+npm run prepare:vendor
 MIX_ENV=prod mix compile_front
 MIX_ENV=prod mix release
 _build/prod/rel/game_simulator/bin/game_simulator start
@@ -229,6 +233,8 @@ server when enabled.
 ```sh
 mix deps.get
 mix test
+npm ci
+npm run prepare:vendor
 mix compile_front
 mix run --no-halt
 ```
@@ -299,7 +305,7 @@ cards are distinguished from hands mostly made by the board.
 from [`gregoire-riviere/html_handler`](https://github.com/gregoire-riviere/html_handler).
 
 The client is served by `HTMLHandler.Plug.OutputStatic` from `priv/static`. SSR
-is not enabled. Run `mix compile_front` after changing HTML, CSS, or JavaScript.
+is not enabled. Run `npm run prepare:vendor` then `mix compile_front` after changing HTML, CSS, or JavaScript.
 The generated `priv/static/` directory is not versioned.
 
 ### Security
@@ -314,3 +320,16 @@ sensitive values.
 The generic token API provided by `html_handler` is disabled: it accepts an
 arbitrary user identifier. Any future identity source must authenticate the user
 server-side, then call `GameSimulatorWeb.Auth.issue_token/1`.
+
+### Traversal visual prototype
+
+Node.js 22+ and npm are required to prepare the self-hosted Three.js 0.170.0 modules.
+Run `npm ci` and `npm run prepare:vendor` before compiling browser assets, including
+release builds. Run `npm test` to check terrain generation and the prepared vendor.
+
+Grant `traversal` permission (admins already have access), then open Traversal in
+the existing navigation. Stage 1 includes a seeded, centrally symmetric 10×10
+terrain with integer heights 0–5 and six placeholder pieces per side. Regenerating
+the same seed preserves the board. Drag to rotate, scroll or pinch to zoom; use
+the top/reset buttons and the height table to inspect the result. WebGL is required.
+Movement, combat, multiplayer and persistence are not implemented at this stage.

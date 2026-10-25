@@ -269,6 +269,12 @@ defmodule GameSimulatorWeb.Endpoint do
     end)
   end
 
+  get "/api/traversal" do
+    authenticated(conn, "traversal", fn conn, _account ->
+      send_json(conn, 200, %{prototype: true, board_size: 10})
+    end)
+  end
+
   post "/api/mr-white" do
     authenticated(conn, "mr_white", fn conn, account ->
       with {:ok, players} <- MrWhite.Game.validate_names(conn.body_params["players"]),

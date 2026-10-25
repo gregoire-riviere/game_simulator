@@ -271,3 +271,18 @@ button:disabled { cursor: wait; opacity: .65; }
 .row-actions { display: flex; flex-wrap: wrap; gap: .45rem; }
 .row-actions button { padding: .5rem .65rem; border: 1px solid #ffffff29; border-radius: .5rem; color: #dbeafe; background: #0b1020cc; }
 .row-actions button:hover { border-color: #7dd3fc66; color: #f8fafc; }
+
+/* Prototype Traversal : le canvas garde son espace lors du redimensionnement. */
+.traversal-toolbar { display: flex; flex-wrap: wrap; gap: 1rem; align-items: end; margin-bottom: 1rem; }
+.traversal-toolbar form { flex: 1 1 22rem; }
+.traversal-seed-actions, .traversal-camera { display: flex; flex-wrap: wrap; gap: .6rem; }
+.traversal-seed-actions input { flex: 1 1 10rem; width: 10rem; margin: 0; }
+.traversal-toolbar button { min-height: 3rem; }
+.traversal-canvas { width: 100%; height: clamp(22rem, 61vh, 44rem); overflow: hidden; border: 1px solid #ffffff29; border-radius: 1rem; background: #101a2a; }
+.traversal-canvas canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+.traversal-status { color: #a5f3fc; font-size: .9rem; }
+.traversal-help { color: #aab4ca; font-size: .85rem; line-height: 1.5; }
+.traversal-data { margin: 1.5rem 0; overflow: auto; color: #cbd5e1; }
+.traversal-data summary { cursor: pointer; }
+.traversal-data table { width: 100%; text-align: center; border-collapse: collapse; margin-top: 1rem; }
+.traversal-data td, .traversal-data th { padding: .5rem; border: 1px solid #ffffff29; }

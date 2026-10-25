@@ -77,8 +77,30 @@ defmodule GameSimulatorWeb.EndpointTest do
       |> then(&Endpoint.call(&1, Endpoint.init([])))
 
     assert response.status == 200
-    assert %{"user" => "test-user", "exp" => expiration, "permissions" => ["admin", "poker", "belote", "mr_white", "llm"]} = Poison.decode!(response.resp_body)
+    assert %{"user" => "test-user", "exp" => expiration, "permissions" => ["admin", "poker", "belote", "mr_white", "traversal", "llm"]} = Poison.decode!(response.resp_body)
     assert is_integer(expiration)
+  end
+
+  test "traversal requires a token and the current traversal permission" do
+    response = Endpoint.call(conn(:get, "/api/traversal"), Endpoint.init([]))
+    assert response.status == 401
+
+    assert :ok = Users.add("terrain-player", "a-long-test-password", ["poker"])
+    {:ok, token, _expiration} = Auth.issue_token("terrain-player")
+
+    request = fn ->
+      conn(:get, "/api/traversal")
+      |> put_req_header("authorization", "Bearer #{token}")
+      |> then(&Endpoint.call(&1, Endpoint.init([])))
+    end
+
+    assert request.().status == 403
+    assert :ok = Users.update("terrain-player", ["traversal"])
+    response = request.()
+    assert response.status == 200
+    assert %{"prototype" => true, "board_size" => 10} = Poison.decode!(response.resp_body)
+    assert :ok = Users.update("terrain-player", ["poker"])
+    assert request.().status == 403
   end
 
   test "changes the authenticated user's password" do

@@ -45,6 +45,7 @@ Le projet contient aujourd'hui :
 ### Prerequis
 
 - Elixir `~> 1.19` avec une version Erlang/OTP compatible.
+- Node.js 22+ et npm pour les modules Three.js du plateau Traversal.
 - `mix` et Hex (`mix local.hex` si necessaire).
 - Les outils de minification installes par `mix install_minifiers` pour compiler
   le client web.
@@ -57,6 +58,8 @@ cd game_simulator
 mix deps.get
 cp .env.example .env
 mix install_minifiers
+npm ci
+npm run prepare:vendor
 mix compile_front
 mix run --no-halt
 ```
@@ -76,7 +79,7 @@ mix run -e 'IO.inspect(GameSimulatorWeb.Users.add("admin", "a-long-unique-passwo
 ```
 
 Les utilisateurs sont stockes dans la table SQLite `users`. Les permissions
-valides sont `admin`, `poker`, `belote`, `mr_white` et `llm`; `admin` donne acces a tout. Si un ancien
+valides sont `admin`, `poker`, `belote`, `mr_white`, `traversal` et `llm`; `admin` donne acces a tout. Si un ancien
 fichier `GAME_SIMULATOR_USERS_FILE` existe au premier demarrage, ses comptes sont
 importes une fois comme admins.
 
@@ -160,6 +163,26 @@ optionnel : il ne peut choisir que parmi les actions légales et est limité à 
 décisions PNJ par match. En cas de quota atteint, d'erreur ou de délai d'attente,
 l'algorithme local reprend immédiatement la main.
 
+### Valider le plateau Traversal
+
+Avec la permission `traversal` (ou `admin`), ouvrez **Traversal** dans le menu.
+Cette première étape est un prototype visuel : terrain 10 × 10 symétrique,
+hauteurs entières de 0 à 5, et six silhouettes indicatives par camp. Il n'y a
+pas encore de déplacements, combats, sauvegarde ni multijoueur.
+
+1. Conservez une graine et cliquez sur **Régénérer** : le relief reste identique.
+2. Changez la graine ou utilisez **Nouvelle graine** : un autre relief apparaît.
+3. Faites tourner le plateau en glissant ; zoomez à la molette ou au pincement.
+4. Comparez **Vue de dessus** et **Réinitialiser la vue**.
+5. Ouvrez **Vérifier les hauteurs entières** pour lire les 100 hauteurs.
+
+Three.js `0.170.0` est verrouillé par `package-lock.json`. `npm ci` puis
+`npm run prepare:vendor` copient ses modules et sa licence dans les assets ;
+le navigateur ne contacte aucun CDN. Exécutez ces commandes avant la compilation
+du client, y compris en release. Les modules générés ne sont pas versionnés.
+Les tests du générateur et du vendor se lancent avec `npm test` après préparation.
+Le rendu nécessite WebGL ; un message explique son indisponibilité.
+
 ### Configurer l'application
 
 La configuration est resolue au demarrage, avec le meme comportement en `mix` et
@@ -235,6 +258,8 @@ Construire et demarrer une release :
 
 ```sh
 MIX_ENV=prod mix deps.get
+npm ci
+npm run prepare:vendor
 MIX_ENV=prod mix compile_front
 MIX_ENV=prod mix release
 _build/prod/rel/game_simulator/bin/game_simulator start
@@ -288,6 +313,8 @@ tables et, si active, le serveur HTTP.
 ```sh
 mix deps.get
 mix test
+npm ci
+npm run prepare:vendor
 mix compile_front
 mix run --no-halt
 ```
@@ -325,6 +352,7 @@ Les routes JSON disponibles sont :
 | `POST /api/admin/users` | Cree un utilisateur ; permission `admin` requise. |
 | `PUT /api/admin/users/:user` | Met a jour les permissions et reset optionnellement le mot de passe ; permission `admin` requise. |
 | `DELETE /api/admin/users/:user` | Supprime un utilisateur ; permission `admin` requise. |
+| `GET /api/traversal` | Vérifie la permission `traversal` avant ouverture du prototype visuel. |
 | `POST /api/table` | Cree ou recupere la table temporaire de l'utilisateur. |
 | `GET /api/table` | Retourne l'etat de la table. |
 | `GET /api/table/extract?n=10` | Exporte les mains recentes en Markdown, de 1 a 50 mains ; permission `llm` requise. |
@@ -381,7 +409,7 @@ la décision déterministe.
 de [`gregoire-riviere/html_handler`](https://github.com/gregoire-riviere/html_handler).
 
 Le client est servi par `HTMLHandler.Plug.OutputStatic` depuis `priv/static/`.
-Le SSR n'est pas active. Relancez `mix compile_front` apres une modification
+Le SSR n'est pas active. Relancez `npm run prepare:vendor` puis `mix compile_front` apres une modification
 HTML, CSS ou JavaScript. Le dossier genere `priv/static/` n'est pas versionne.
 
 ### Securite

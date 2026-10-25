@@ -1,6 +1,6 @@
 // Le token ne vit que dans l'onglet courant : fermer le navigateur déconnecte l'utilisateur.
 const tokenKey = "game-simulator-token";
-const permissionNames = ["admin", "poker", "belote", "mr_white", "llm"];
+const permissionNames = ["admin", "poker", "belote", "mr_white", "traversal", "llm"];
 const appShell = document.querySelector(".app-shell");
 const loginScreen = document.getElementById("login-screen");
 const dashboard = document.getElementById("dashboard");
@@ -13,6 +13,11 @@ const menuToggle = document.getElementById("menu-toggle");
 const pokerNav = document.getElementById("poker-nav");
 const beloteNav = document.getElementById("belote-nav");
 const mrWhiteNav = document.getElementById("mr-white-nav");
+const traversalNav = document.getElementById("traversal-nav");
+const traversalPage = document.getElementById("traversal-page");
+let traversalCleanup = null;
+let traversalVersion = 0;
+
 const adminNav = document.getElementById("admin-nav");
 const adminNavLabel = document.getElementById("admin-nav-label");
 const accountNav = document.getElementById("account-nav");
@@ -125,6 +130,7 @@ function showDashboard(nextSession) {
 }
 
 function showLogin(message = "") {
+  stopTraversal();
   sessionStorage.removeItem(tokenKey);
   appShell.classList.remove("dashboard-open");
   dashboard.hidden = true;
@@ -165,6 +171,7 @@ function defaultView() {
   if (hasPermission("poker")) return "poker";
   if (hasPermission("belote")) return "belote";
   if (hasPermission("mr_white")) return "mr-white";
+  if (hasPermission("traversal")) return "traversal";
   if (hasPermission("admin")) return "admin";
   return "account";
 }
@@ -173,6 +180,7 @@ function renderAccess() {
   pokerNav.hidden = !hasPermission("poker");
   beloteNav.hidden = !hasPermission("belote");
   mrWhiteNav.hidden = !hasPermission("mr_white");
+  traversalNav.hidden = !hasPermission("traversal");
   adminNav.hidden = !hasPermission("admin");
   adminNavLabel.hidden = !hasPermission("admin");
   llmControls.hidden = !hasPermission("llm");
@@ -181,9 +189,10 @@ function renderAccess() {
 }
 
 function showView(view) {
-  const allowedView = view === "admin" && !hasPermission("admin") ? defaultView() : view === "poker" && !hasPermission("poker") ? defaultView() : view === "belote" && !hasPermission("belote") ? defaultView() : view === "mr-white" && !hasPermission("mr_white") ? defaultView() : view;
-  const pages = { poker: pokerPage, belote: belotePage, "mr-white": mrWhitePage, admin: adminPage, account: accountPage };
-  const navs = { poker: pokerNav, belote: beloteNav, "mr-white": mrWhiteNav, admin: adminNav, account: accountNav };
+  const allowedView = view === "admin" && !hasPermission("admin") ? defaultView() : view === "poker" && !hasPermission("poker") ? defaultView() : view === "belote" && !hasPermission("belote") ? defaultView() : view === "mr-white" && !hasPermission("mr_white") ? defaultView() : view === "traversal" && !hasPermission("traversal") ? defaultView() : view;
+  stopTraversal();
+  const pages = { poker: pokerPage, belote: belotePage, "mr-white": mrWhitePage, traversal: traversalPage, admin: adminPage, account: accountPage };
+  const navs = { poker: pokerNav, belote: beloteNav, "mr-white": mrWhiteNav, traversal: traversalNav, admin: adminNav, account: accountNav };
 
   Object.entries(pages).forEach(([name, page]) => page.hidden = name !== allowedView);
   Object.entries(navs).forEach(([name, nav]) => {
@@ -196,6 +205,28 @@ function showView(view) {
   if (allowedView === "poker") restoreTable();
   if (allowedView === "belote") restoreBelote();
   if (allowedView === "mr-white") restoreMrWhite();
+  if (allowedView === "traversal") startTraversal();
+}
+
+function stopTraversal() {
+  traversalVersion += 1;
+  if (traversalCleanup) traversalCleanup();
+  traversalCleanup = null;
+}
+
+async function startTraversal() {
+  const version = traversalVersion;
+  const status = document.getElementById("traversal-status");
+  status.textContent = "Chargement du plateau…";
+  try {
+    await api("/api/traversal");
+    const module = await import("/traversal/view.js");
+    if (version === traversalVersion && !traversalPage.hidden) {
+      traversalCleanup = module.mountTraversal(traversalPage);
+    }
+  } catch (_) {
+    if (version === traversalVersion) status.textContent = "Plateau indisponible. Vérifiez vos droits et la compilation des assets, puis rouvrez Traversal.";
+  }
 }
 
 function money(cents) {
@@ -1517,7 +1548,7 @@ window.addEventListener("scroll", () => {
   previousScrollY = scrollY;
 }, { passive: true });
 
-[pokerNav, beloteNav, mrWhiteNav, adminNav, accountNav].forEach((nav) => nav.addEventListener("click", () => showView(nav.dataset.view)));
+[pokerNav, beloteNav, mrWhiteNav, traversalNav, adminNav, accountNav].forEach((nav) => nav.addEventListener("click", () => showView(nav.dataset.view)));
 
 passwordForm.addEventListener("submit", async (event) => {
   event.preventDefault();
