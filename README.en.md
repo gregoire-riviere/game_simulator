@@ -332,4 +332,10 @@ the existing navigation. Stage 1 includes a seeded, centrally symmetric 10×10
 terrain with integer heights 0–5 and six placeholder pieces per side. Regenerating
 the same seed preserves the board. Drag to rotate, scroll or pinch to zoom; use
 the top/reset buttons and the height table to inspect the result. WebGL is required.
+Terrain combines interpolated noise at two scales and rounds the heights into
+open areas, plateaus, ridges and valleys. Relief amplitude and detail vary by seed;
+a board need not use all six levels. Adjacent differences are limited to 2,
+including diagonals. Central symmetry intentionally repeats terrain on the
+opposite side. This replaces the diamond peaks: existing seeds produce a new
+layout, still reproducible within this generator version.
 Movement, combat, multiplayer and persistence are not implemented at this stage.

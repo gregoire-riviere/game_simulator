@@ -30,6 +30,37 @@ test('1000 seeds preserve dimensions, integer heights, fairness and traversable 
   }
 });
 
+test('seed population includes open plateaus, broken slopes and different relief amplitudes', () => {
+  const layouts = new Set(), amplitudes = new Set();
+  let open = 0, broken = 0, steep = 0, plateaus = 0;
+  for (let seed = 0; seed < 1000; seed += 1) {
+    const board = generateBoard(String(seed)), heights = board.flat();
+    layouts.add(heights.join(','));
+    amplitudes.add(Math.max(...heights) - Math.min(...heights));
+    let equal = 0, edges = 0, hasSteep = false, hasPlateau = false;
+    board.forEach((row, z) => row.forEach((height, x) => {
+      for (const [dx, dz] of [[1, 0], [0, 1]]) {
+        if (board[z + dz]?.[x + dx] === undefined) continue;
+        const difference = Math.abs(height - board[z + dz][x + dx]);
+        edges += 1;
+        if (difference === 0) equal += 1;
+        if (difference === 2) hasSteep = true;
+      }
+      if (height > 0 && height === row[x + 1] && height === board[z + 1]?.[x] && height === board[z + 1]?.[x + 1]) hasPlateau = true;
+    }));
+    // Wide margins guard variety without pinning exact seed snapshots or noise parameters.
+    if (equal / edges > 0.7) open += 1;
+    if (equal / edges < 0.5) broken += 1;
+    if (hasSteep) steep += 1;
+    if (hasPlateau) plateaus += 1;
+  }
+  assert.ok(layouts.size > 950, 'seeds should produce distinct layouts');
+  assert.ok(amplitudes.size >= 3, 'relief should have several height ranges');
+  assert.ok(open > 50 && broken > 50, 'include both open and more broken terrain');
+  assert.ok(steep > 100, 'slopes should not always descend in single-step diamonds');
+  assert.ok(plateaus > 500, 'elevated flat areas should be common');
+});
+
 test('vendor preparation produces self-hosted modules with the Three.js licence', async () => {
   const controls = await readFile(new URL('../../web/assets/vendor/OrbitControls.js', import.meta.url), 'utf8');
   assert.ok(controls.includes("from './three.module.js'"));

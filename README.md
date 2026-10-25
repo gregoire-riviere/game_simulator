@@ -176,6 +176,14 @@ pas encore de déplacements, combats, sauvegarde ni multijoueur.
 4. Comparez **Vue de dessus** et **Réinitialiser la vue**.
 5. Ouvrez **Vérifier les hauteurs entières** pour lire les 100 hauteurs.
 
+Le relief combine du bruit interpolé à deux échelles, puis arrondit les hauteurs
+pour former des zones ouvertes, plateaux, crêtes et vallées moins réguliers.
+L'amplitude et les détails varient selon la graine ; chaque carte n'utilise pas
+forcément les six niveaux. Les ruptures sont limitées à 2, diagonales comprises.
+La symétrie centrale reste volontaire et répète le relief dans le camp opposé.
+Ce générateur remplace les pics en losange : les anciennes graines donnent un
+nouveau terrain, toujours reproductible avec cette version.
+
 Three.js `0.170.0` est verrouillé par `package-lock.json`. `npm ci` puis
 `npm run prepare:vendor` copient ses modules et sa licence dans les assets ;
 le navigateur ne contacte aucun CDN. Exécutez ces commandes avant la compilation
