@@ -8,8 +8,10 @@ defmodule GameSimulator.Traversal.Bot do
 
   def choose(game, difficulty) do
     budget = limits(difficulty)
+    fields = terrain(game.board, Map.get(game, :forests, []))
+    fields = if difficulty == "easy", do: fields, else: Map.put(fields, :interceptions, interceptions(game, fields))
+    budget = Map.put(budget, :terrain, fields)
     deadline = System.monotonic_time(:millisecond) + budget.milliseconds
-    budget = Map.put(budget, :terrain, terrain(game.board, Map.get(game, :forests, [])))
     options = ranked(game, game.turn, budget.terrain)
     options = if difficulty == "easy", do: options, else: defend(game, options, deadline)
     case options do
@@ -99,6 +101,98 @@ defmodule GameSimulator.Traversal.Bot do
     end
   end
 
+  # Project each incoming Sentinel along legal fastest advances. The reply fields
+  # count whole legal turns until a real capture, including blockers and forests.
+  # They are built once at the root; search reuses them as a positional estimate.
+  def interceptions(game, terrain) do
+    if game.exited != [] do
+      []
+    else
+      Game.active(game)
+      |> Enum.filter(&(&1.player != game.turn and &1.type == "sentinel" and abs(&1.row - Game.last_row(&1.player)) <= 6))
+      |> Enum.map(fn runner ->
+        route = rush_route(game, runner.id, terrain[runner.player], 0, [])
+        defenders = Game.active(game) |> Enum.filter(&(&1.player == game.turn))
+          |> Enum.sort_by(fn piece -> {-piece.strength, abs(piece.row - runner.row) + abs(piece.col - runner.col), piece.id} end)
+          |> Enum.take(2)
+        fields = for {position, turn} <- route, defender <- defenders do
+          {defender.id, turn, capture_distances(position, defender.id, runner.id)}
+        end
+        %{runner: runner.id, player: game.turn, fields: fields}
+      end)
+    end
+  end
+
+  def rush_route(_game, _id, _distances, 4, route), do: Enum.reverse(route)
+  def rush_route(game, id, distances, turn, route) do
+    runner = Enum.find(Game.active(game), &(&1.id == id))
+    if runner == nil or game.result != nil do
+      Enum.reverse(route)
+    else
+      route = [{game, turn} | route]
+      moves = Game.legal(%{game | turn: runner.player}, id)
+      # Keep the current lane on equal terrain costs; captures remain legal paths.
+      move = Enum.min_by(moves, fn move ->
+        remaining = if move.kind == "exit", do: 0, else: distances[{move.row, move.col}]
+        {remaining, abs(move.col - runner.col), move.row, move.col}
+      end, fn -> nil end)
+      if move == nil or move.kind == "exit" do
+        Enum.reverse(route)
+      else
+        rush_route(Game.apply_action(%{game | turn: runner.player}, move), id, distances, turn + 1, route)
+      end
+    end
+  end
+
+  def capture_distances(game, defender_id, runner_id) do
+    defender = Enum.find(Game.active(game), &(&1.id == defender_id))
+    runner = Enum.find(Game.active(game), &(&1.id == runner_id))
+    {edges, captures} = Enum.reduce(for(r <- 0..9, c <- 0..9, do: {r, c}), {%{}, %{}}, fn {r, c} = origin, {edges, captures} ->
+      occupied = Game.occupant(game, r, c)
+      if defender == nil or runner == nil or (occupied != nil and occupied.id != defender_id) do
+        {edges, captures}
+      else
+        pieces = Enum.map(game.pieces, fn piece -> if piece.id == defender_id, do: %{piece | row: r, col: c}, else: piece end)
+        moves = Game.legal(%{game | pieces: pieces, turn: defender.player}, defender_id)
+        Enum.reduce(moves, {edges, captures}, fn move, {edges, captures} ->
+          cond do
+            move.kind == "attack" and move.row == runner.row and move.col == runner.col -> {edges, Map.put(captures, origin, 1)}
+            move.kind == "move" -> {Map.update(edges, {move.row, move.col}, [origin], &[origin | &1]), captures}
+            true -> {edges, captures}
+          end
+        end)
+      end
+    end)
+    capture_walk(edges, Map.keys(captures), captures, 1)
+  end
+
+  def capture_walk(_edges, [], distances, _turn), do: distances
+  def capture_walk(_edges, _frontier, distances, 5), do: distances
+  def capture_walk(edges, frontier, distances, turn) do
+    {next, distances} = Enum.reduce(frontier, {[], distances}, fn cell, acc ->
+      Enum.reduce(Map.get(edges, cell, []), acc, fn origin, {next, distances} ->
+        if Map.has_key?(distances, origin), do: {next, distances}, else: {[origin | next], Map.put(distances, origin, turn + 1)}
+      end)
+    end)
+    capture_walk(edges, next, distances, turn + 1)
+  end
+
+  def interception_score(game, player, terrain) do
+    Enum.reduce(Map.get(terrain, :interceptions, []), 0, fn threat, sum ->
+      runner = Enum.find(Game.active(game), &(&1.id == threat.runner))
+      if runner == nil or game.exited != [] do
+        sum
+      else
+        margin = Enum.map(threat.fields, fn {id, turn, distances} ->
+          defender = Enum.find(Game.active(game), &(&1.id == id))
+          if defender == nil, do: 10, else: Map.get(distances, {defender.row, defender.col}, 10) - turn
+        end) |> Enum.min(fn -> 10 end)
+        value = -max(0, margin) * 350 - min(0, margin) * 20
+        sum + if(threat.player == player, do: value, else: -value)
+      end
+    end)
+  end
+
   # Beam width, depth, node budget and a monotonic deadline all bound the search.
   def search(game, depth, player, budget, nodes, deadline, alpha, beta) do
     if depth == 0 or game.result != nil or exhausted?(nodes, deadline) do
@@ -134,7 +228,7 @@ defmodule GameSimulator.Traversal.Bot do
   def evaluate(game, player, terrain) do
     [a, b] = game.scores
     score = if player == 1, do: a - b, else: b - a
-    score * 500 + Enum.reduce(Game.active(game), 0, fn piece, sum ->
+    interception_score(game, player, terrain) + score * 500 + Enum.reduce(Game.active(game), 0, fn piece, sum ->
       progress = 9 - abs(piece.row - Game.last_row(piece.player))
       neighbours = Game.neighbours(piece.row, piece.col) |> Enum.map(fn {r, c} -> Game.occupant(game, r, c) end) |> Enum.reject(&is_nil/1)
       support = Enum.count(neighbours, &(&1.player == piece.player))
