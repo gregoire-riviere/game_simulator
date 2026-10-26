@@ -20,6 +20,27 @@ export function mountTraversal(page, api) {
   const exportStatus = page.querySelector('#traversal-export-status');
   const exportText = page.querySelector('#traversal-export-text');
   const exportDetails = page.querySelector('#traversal-export-details');
+  const debugOutput = page.querySelector('#traversal-debug-output');
+  function renderDebug() {
+    if (!debugOutput) return;
+    const debug = state?.bot_diagnostic;
+    if (!debug) { debugOutput.textContent = 'Aucun coup du bot analysé.'; return; }
+    const position = ([r, c]) => r < 0 || r > 9 ? 'EXIT' : String.fromCharCode(65 + c) + (r + 1);
+    const detail = (parts) => Object.entries(parts || {}).map(([key, value]) => key + '=' + value).join(' ');
+    const lines = ['Profondeur ' + debug.depth + ' · Dernier choix du bot : ' + debug.chosen.piece +
+      ' -> ' + position([debug.chosen.row, debug.chosen.col])];
+    (debug.candidates || []).forEach((entry, index) => {
+      const m = entry.move;
+      lines.push((index + 1) + '. ' + (entry.chosen ? '[CHOISI] ' : '') +
+        m.piece + ' -> ' + position([m.row, m.col]) + ' (' + m.kind + ')' +
+        ' · statique=' + entry.static + ' · présélection=' + entry.adjusted +
+        ' · recherche=' + (entry.searched == null ? 'incomplète' : entry.searched));
+      lines.push('    ' + detail(entry.components));
+    });
+    lines.push('Calcul diagnostique indépendant, potentiellement différent de la recherche réelle si le budget expire.');
+    debugOutput.textContent = lines.join('\n');
+  }
+
   const coord = ([r, c]) => r < 0 || r > 9 ? 'EXIT' : String.fromCharCode(65 + c) + (r + 1);
   function compactReport() {
     if (!state?.game) return 'Aucune partie en cours.';
@@ -175,6 +196,7 @@ export function mountTraversal(page, api) {
       terrain.add(marker);
     }
     updateStatus();
+    renderDebug();
     // La table permet de vérifier les hauteurs exactes du rendu.
     const body = page.querySelector('#traversal-heights');
     body.replaceChildren();
