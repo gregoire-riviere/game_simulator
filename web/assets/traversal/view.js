@@ -31,11 +31,12 @@ export function mountTraversal(page, api) {
       ' mode=' + a.mode + ' stop=' + a.stop + ' score=' + a.score +
       ' nodes=' + a.nodes_used + '/' + a.nodes_limit +
       ' elapsed_ms=' + a.elapsed_ms + ' search_limit_ms=' + a.time_limit_ms +
-      ' legal=' + a.root_legal + ' considered=' + a.root_considered +
+      ' legal=' + a.root_legal + ' filtered=' + a.root_filtered +
+      ' considered=' + a.root_considered +
       ' checked=' + a.root_checked
     ];
     if (a.interrupted) lines.push(
-      '    interrupted depth=' + a.interrupted.depth +
+      '    interrupted depth=' + a.interrupted.depth + ' reason=' + a.interrupted.reason +
       ' checked=' + a.interrupted.checked + '/' + a.interrupted.total +
       ' (discarded; prior completed depth retained)'
     );
