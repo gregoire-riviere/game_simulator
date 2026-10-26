@@ -20,33 +20,44 @@ export function mountTraversal(page, api) {
   const exportStatus = page.querySelector('#traversal-export-status');
   const exportText = page.querySelector('#traversal-export-text');
   const exportDetails = page.querySelector('#traversal-export-details');
-  const debugOutput = page.querySelector('#traversal-debug-output');
-  function renderDebug() {
-    if (!debugOutput) return;
-    const debug = state?.bot_diagnostic;
-    if (!debug) { debugOutput.textContent = 'Aucun coup du bot analysé.'; return; }
-    const position = ([r, c]) => r < 0 || r > 9 ? 'EXIT' : String.fromCharCode(65 + c) + (r + 1);
-    const detail = (parts) => Object.entries(parts || {}).map(([key, value]) => key + '=' + value).join(' ');
-    const lines = ['Profondeur ' + debug.depth + ' · Dernier choix du bot : ' + debug.chosen.piece +
-      ' -> ' + position([debug.chosen.row, debug.chosen.col])];
-    (debug.candidates || []).forEach((entry, index) => {
-      const m = entry.move;
-      lines.push((index + 1) + '. ' + (entry.chosen ? '[CHOISI] ' : '') +
-        m.piece + ' -> ' + position([m.row, m.col]) + ' (' + m.kind + ')' +
-        ' · statique=' + entry.static + ' · présélection=' + entry.adjusted +
-        ' · recherche=' + (entry.searched == null ? 'incomplète' : entry.searched));
-      lines.push('    ' + detail(entry.components));
-    });
-    lines.push('Calcul diagnostique indépendant, potentiellement différent de la recherche réelle si le budget expire.');
-    debugOutput.textContent = lines.join('\n');
+  const coord = ([r, c]) => r < 0 || r > 9 ? 'EXIT' : String.fromCharCode(65 + c) + (r + 1);
+  // Every AI line comes from the search that made that historical move.
+  // A score from an aborted deeper iteration is NEVER represented as validated.
+  const moveNotation = m => m.piece + '>' + coord([m.row, m.col]) +
+    ({move:'M', attack:'A', exit:'E'}[m.kind] || m.kind) + (m.special ? '*' : '');
+  function analysisLines(a) {
+    const lines = [
+      '    AI depth=' + a.depth + '/' + a.limit_depth +
+      ' mode=' + a.mode + ' stop=' + a.stop + ' score=' + a.score +
+      ' nodes=' + a.nodes_used + '/' + a.nodes_limit +
+      ' elapsed_ms=' + a.elapsed_ms + ' search_limit_ms=' + a.time_limit_ms +
+      ' legal=' + a.root_legal + ' considered=' + a.root_considered +
+      ' checked=' + a.root_checked
+    ];
+    if (a.interrupted) lines.push(
+      '    interrupted depth=' + a.interrupted.depth +
+      ' checked=' + a.interrupted.checked + '/' + a.interrupted.total +
+      ' (discarded; prior completed depth retained)'
+    );
+    (a.candidates || []).forEach((c, i) => lines.push(
+      '    ' + (i + 1) + '. ' + (c.move.piece === a.chosen.piece &&
+      c.move.row === a.chosen.row && c.move.col === a.chosen.col &&
+      c.move.kind === a.chosen.kind ? '[CHOSEN] ' : '') +
+      moveNotation(c.move) + ' static=' + c.static +
+      ' presel=' + c.adjusted +
+      ' searched=' + (c.searched == null ? '-' : c.searched) +
+      ' nodes=' + c.nodes +
+      ' pv=' + ((c.pv || []).map((m, index) =>
+        (index % 2 === 0 ? 'B:' : 'H:') + moveNotation(m)).join(' ') || '-')
+    ));
+    return lines;
   }
 
-  const coord = ([r, c]) => r < 0 || r > 9 ? 'EXIT' : String.fromCharCode(65 + c) + (r + 1);
   function compactReport() {
     if (!state?.game) return 'Aucune partie en cours.';
     const game = state.game;
     const lines = [
-      'TRAVERSAL replay v1',
+      'TRAVERSAL replay v2',
       'Bot=' + state.difficulty + ' variant=' + game.variant + ' seed=' + JSON.stringify(state.seed),
       'Board=' + game.board.map(row => row.join('')).join('/'),
       'Forests=' + (game.forests || []).map(p => coord([p.row, p.col])).sort().join(','),
@@ -55,14 +66,17 @@ export function mountTraversal(page, api) {
         ' result=' + (game.result ? game.result.winner + ':' + game.result.reason : (state.blocked ? 'blocked' : 'ongoing')),
       'History (H=human,B=bot; M=move,A=attack,E=exit; *=special):'
     ];
-    (state.log || []).forEach((m, i) => lines.push(
-      (i + 1) + '.' + (m.player === 1 ? 'H' : 'B') + ' ' + m.piece +
-      ' ' + coord(m.from) + '>' + coord(m.to) + ' ' +
-      ({move:'M',attack:'A',exit:'E'}[m.kind] || m.kind) +
-      (m.special ? '*' : '') + ' c' + m.cost +
-      (m.captured ? ' x' + m.captured : '') +
-      (m.attack == null ? '' : ' ' + m.attack + '/' + m.defence)
-    ));
+    (state.log || []).forEach((m, i) => {
+      lines.push(
+        (i + 1) + '.' + (m.player === 1 ? 'H' : 'B') + ' ' + m.piece +
+        ' ' + coord(m.from) + '>' + coord(m.to) + ' ' +
+        ({move:'M',attack:'A',exit:'E'}[m.kind] || m.kind) +
+        (m.special ? '*' : '') + ' c' + m.cost +
+        (m.captured ? ' x' + m.captured : '') +
+        (m.attack == null ? '' : ' ' + m.attack + '/' + m.defence)
+      );
+      if (m.player === 2 && m.analysis) lines.push(...analysisLines(m.analysis));
+    });
     return lines.join('\n');
   }
   const copyReport = async () => {
@@ -196,7 +210,6 @@ export function mountTraversal(page, api) {
       terrain.add(marker);
     }
     updateStatus();
-    renderDebug();
     // La table permet de vérifier les hauteurs exactes du rendu.
     const body = page.querySelector('#traversal-heights');
     body.replaceChildren();
