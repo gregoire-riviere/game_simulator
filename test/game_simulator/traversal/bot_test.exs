@@ -151,6 +151,84 @@ defmodule GameSimulator.Traversal.BotTest do
     assert trace.chosen == chosen
   end
 
+  defp medium_replay_threat do
+    heights = "0111344443/1212355543/1123345544/2233334444/3333444444/4444443333/4444333322/4455433211/3455532121/3444431110"
+      |> String.split("/")
+      |> Enum.map(fn row -> row |> String.graphemes() |> Enum.map(&String.to_integer/1) end)
+    forests = for square <- ["D5", "D6", "E5", "E6", "F5", "F6", "G5", "G6"] do
+      <<col::utf8, row::binary>> = square
+      %{row: String.to_integer(row) - 1, col: col - ?A}
+    end
+    history = [
+      {"1-5", "H8"}, {"2-0", "C3"}, {"1-4", "G8"}, {"2-5", "H3"},
+      {"1-5", "H6"}, {"2-0", "C5"}, {"1-1", "C8"}, {"2-2", "D5"},
+      {"1-0", "B8"}, {"2-1", "C3"}, {"1-4", "H7"}, {"2-4", "I3"},
+      {"1-2", "D8"}, {"2-3", "D3"}, {"1-4", "G6"}, {"2-5", "H5"},
+      {"1-3", "H7"}, {"2-4", "G5"}, {"1-3", "G7"}, {"2-3", "C4"},
+      {"1-0", "D7"}, {"2-1", "D4"}, {"1-0", "D6"}, {"2-2", "F5"},
+      {"1-2", "G8"}, {"2-1", "E5"}, {"1-0", "C6"}, {"2-1", "D5"},
+      {"1-1", "B6"}
+    ]
+    Enum.reduce(history, %{Game.new(heights, "forests", "1123835220") | forests: forests}, fn {id, square}, state ->
+      <<col::utf8, row::binary>> = square
+      destination = {String.to_integer(row) - 1, col - ?A}
+      move = Enum.find(Game.legal(state, id), &({&1.row, &1.col} == destination))
+      assert move != nil, "replay move #{state.moves + 1}: #{id} to #{square} must be legal"
+      Game.apply_action(state, move)
+    end)
+  end
+
+  test "medium uses a bounded tactical extension when a Sentinel can be captured" do
+    state = medium_replay_threat()
+    assert state.moves == 29 and state.turn == 2
+    assert "2-0" in Bot.tactical_alerts(state)
+    assert Enum.any?(Game.actions(%{state | turn: 1}), fn action ->
+      action.kind == "attack" and action.row == 4 and action.col == 2
+    end)
+
+    {move, trace} = Bot.choose_with_trace(state, "medium")
+    assert move in Game.actions(state)
+    assert trace.chosen == move
+    assert trace.tactical
+    assert "2-0" in trace.tactical_alerts
+    assert trace.limit_depth == 3
+    assert trace.depth in [2, 3]
+    assert trace.nodes_used <= 500
+    assert trace.root_considered <= 12
+    if trace.depth == 3 do
+      assert trace.root_checked <= 6
+      assert length(hd(trace.candidates).pv) <= 3
+    else
+      assert trace.stop == "budget"
+      assert trace.interrupted.depth == 3
+    end
+  end
+
+  test "medium keeps depth two for a quiet position and preserves easy level" do
+    initial = %{Game.new(board()) | turn: 2}
+    assert Bot.tactical_alerts(initial) == []
+    {_move, trace} = Bot.choose_with_trace(initial, "medium")
+    assert trace.depth == 2
+    assert trace.limit_depth == 2
+    refute trace.tactical
+
+    {_move, easy} = Bot.choose_with_trace(initial, "easy")
+    assert easy.depth == 1
+    refute easy.tactical
+  end
+
+  test "medium detects Explorer second-exit alarms without changing game rules" do
+    exited = %{piece("explorer", 1, 0, 9, "first") | status: "exited"}
+    state = %{game([
+      piece("explorer", 1, 1, 0, "runner"),
+      piece("vanguard", 2, 4, 4, "defender"),
+      exited
+    ]) | turn: 2, exited: ["first"], scores: [1, 0]}
+    assert "exit" in Bot.tactical_alerts(state)
+    {_move, trace} = Bot.choose_with_trace(state, "medium")
+    assert trace.tactical and trace.limit_depth == 3
+  end
+
   test "every difficulty takes an immediate Sentinel victory" do
     state = %{game([piece("sentinel", 2, 9, 5, "s"), piece("sentinel", 1, 2, 5, "enemy")]) | turn: 2}
     for difficulty <- ["easy", "medium", "hard"] do
