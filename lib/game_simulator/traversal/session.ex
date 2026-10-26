@@ -29,7 +29,7 @@ defmodule GameSimulator.Traversal.Session do
   def handle_call({:new, board, difficulty, seed}, from, state), do: handle_call({:new, board, difficulty, seed, "classic"}, from, state)
   def handle_call({:new, board, difficulty, seed, variant}, _from, state) do
     if Game.valid_board?(board) and difficulty in ["easy", "medium", "hard"] and Variant.valid?(variant, seed) do
-      next = %{game: Game.new(board, variant, seed), seed: seed, difficulty: difficulty, revision: 0, log: [], id: Base.url_encode64(:crypto.strong_rand_bytes(18), padding: false)}
+      next = %{game: Game.new(board, variant, seed), seed: seed, difficulty: difficulty, revision: 0, log: [], bot_diagnostic: nil, id: Base.url_encode64(:crypto.strong_rand_bytes(18), padding: false)}
       {:reply, {:ok, public(next)}, next, 1_800_000}
     else
       {:reply, {:error, :invalid_game}, state, 1_800_000}
@@ -54,7 +54,10 @@ defmodule GameSimulator.Traversal.Session do
   def handle_info({:bot, id, revision}, %{id: id, revision: revision, game: %{turn: 2, result: nil}} = state) do
     case Bot.choose(state.game, state.difficulty) do
       nil -> {:noreply, state, 1_800_000}
-      move -> {:noreply, record(state, Game.apply_action(state.game, move), move), 1_800_000}
+      move ->
+        diagnostic = Bot.diagnostic(state.game, state.difficulty, move)
+        next = %{record(state, Game.apply_action(state.game, move), move) | bot_diagnostic: diagnostic}
+        {:noreply, next, 1_800_000}
     end
   end
   def handle_info({:bot, _id, _revision}, state), do: {:noreply, state, 1_800_000}
@@ -75,6 +78,6 @@ defmodule GameSimulator.Traversal.Session do
   def public(state) do
     actions = Game.actions(state.game)
     game = Map.drop(state.game, [:history])
-    %{game: game, seed: state.seed, game_id: state.id, revision: state.revision, difficulty: state.difficulty, log: state.log, legal: if(game.turn == 1, do: actions, else: []), thinking: game.turn == 2 and game.result == nil and actions != [], blocked: game.result == nil and actions == []}
+    %{game: game, seed: state.seed, game_id: state.id, revision: state.revision, difficulty: state.difficulty, log: state.log, bot_diagnostic: state.bot_diagnostic, legal: if(game.turn == 1, do: actions, else: []), thinking: game.turn == 2 and game.result == nil and actions != [], blocked: game.result == nil and actions == []}
   end
 end
