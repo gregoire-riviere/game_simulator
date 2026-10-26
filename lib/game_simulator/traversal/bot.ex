@@ -4,7 +4,7 @@ defmodule GameSimulator.Traversal.Bot do
 
   def limits("easy"), do: %{depth: 1, width: 1, nodes: 0, milliseconds: 0}
   def limits("medium"), do: %{depth: 2, width: 12, nodes: 500, milliseconds: 800}
-  def limits("hard"), do: %{depth: 3, width: 18, nodes: 2500, milliseconds: 1600}
+  def limits("hard"), do: %{depth: 3, width: 18, nodes: 2500, milliseconds: 1800}
 
   # Keep the simple API for existing callers. The session records the exact trace
   # returned by the same search that selected the action.
@@ -67,8 +67,8 @@ defmodule GameSimulator.Traversal.Bot do
         trace = %{
           chosen: chosen, score: score, depth: depth, limit_depth: budget.depth,
           mode: if(depth == 1, do: "preselection", else: "search"),
-          stop: stop, interrupted: if(stop == "budget", do: last_attempt, else: nil),
-          root_legal: length(ranked_options), root_considered: length(candidates),
+          stop: stop, interrupted: if(stop == "budget", do: Map.put(last_attempt, :reason, if(remaining <= 0, do: "nodes", else: "time")), else: nil),
+          root_legal: length(ranked_options), root_filtered: length(options), root_considered: length(candidates),
           root_checked: length(scored), nodes_used: budget.nodes - remaining,
           nodes_limit: budget.nodes, elapsed_ms: System.monotonic_time(:millisecond) - started,
           time_limit_ms: budget.milliseconds, candidates: entries
@@ -83,9 +83,9 @@ defmodule GameSimulator.Traversal.Bot do
         if exhausted?(left, deadline) do
           {:halt, {best, score, left, entries, false, false}}
         else
-          {value, remaining, line, finished} =
+          {value, remaining, line} =
             search_line(Game.apply_action(game, move), depth - 1, game.turn, budget, left - 1, deadline, -2_000_000, 2_000_000)
-          valid = finished and not exhausted?(remaining, deadline)
+          valid = not exhausted?(remaining, deadline)
           entry = %{
             move: move, adjusted: adjusted, searched: if(valid, do: value, else: nil),
             nodes: left - remaining, pv: if(valid, do: [move | line], else: [])
@@ -311,47 +311,40 @@ defmodule GameSimulator.Traversal.Bot do
   # Preserve the public search/8 return shape while collecting the actual
   # principal line inside the search used by choose_with_trace/2.
   def search(game, depth, player, budget, nodes, deadline, alpha, beta) do
-    {value, left, _line, _complete} = search_line(game, depth, player, budget, nodes, deadline, alpha, beta)
+    {value, left, _line} = search_line(game, depth, player, budget, nodes, deadline, alpha, beta)
     {value, left}
   end
 
-  # A cutoff from alpha-beta is a valid completed bound; a budget interruption
-  # is not. Never expose a partial subtree value as a searched candidate score.
+  # This mirrors the original alpha-beta control flow: collecting its best
+  # branch does not alter cutoffs, budget checks, or the selected numeric score.
+  # Only fully completed root searches are retained by choose_with_trace/2.
   defp search_line(game, depth, player, budget, nodes, deadline, alpha, beta) do
-    cond do
-      depth == 0 or game.result != nil ->
-        {evaluate(game, player, budget.terrain), nodes, [], true}
-      exhausted?(nodes, deadline) ->
-        {evaluate(game, player, budget.terrain), nodes, [], false}
-      true ->
-        maximizing = game.turn == player
-        choices = ranked(game, game.turn, budget.terrain) |> Enum.take(budget.width)
-        if choices == [] do
-          {evaluate(game, player, budget.terrain), nodes, [], true}
-        else
-          initial = if maximizing, do: -2_000_000, else: 2_000_000
-          {best, left, _a, _b, line, complete} =
-            Enum.reduce_while(choices, {initial, nodes, alpha, beta, [], true}, fn {move, _}, {best, left, a, b, line, _} ->
-              if exhausted?(left, deadline) do
-                {:halt, {best, left, a, b, line, false}}
-              else
-                {value, remaining, child_line, finished} =
-                  search_line(Game.apply_action(game, move), depth - 1, player, budget, left - 1, deadline, a, b)
-                if not finished do
-                  {:halt, {best, remaining, a, b, line, false}}
-                else
-                  better = if maximizing, do: value > best, else: value < best
-                  best = if better, do: value, else: best
-                  line = if better, do: [move | child_line], else: line
-                  a = if maximizing, do: max(a, best), else: a
-                  b = if maximizing, do: b, else: min(b, best)
-                  result = {best, remaining, a, b, line, true}
-                  if a >= b, do: {:halt, result}, else: {:cont, result}
-                end
-              end
-            end)
-          {if(best == initial, do: evaluate(game, player, budget.terrain), else: best), left, line, complete}
-        end
+    if depth == 0 or game.result != nil or exhausted?(nodes, deadline) do
+      {evaluate(game, player, budget.terrain), nodes, []}
+    else
+      maximizing = game.turn == player
+      choices = ranked(game, game.turn, budget.terrain) |> Enum.take(budget.width)
+      if choices == [] do
+        {evaluate(game, player, budget.terrain), nodes, []}
+      else
+        initial = if maximizing, do: -2_000_000, else: 2_000_000
+        {value, left, _alpha, _beta, line} =
+          Enum.reduce_while(choices, {initial, nodes, alpha, beta, []}, fn {move, _estimate}, {best, left, a, b, line} ->
+            if exhausted?(left, deadline) do
+              {:halt, {if(best == initial, do: evaluate(game, player, budget.terrain), else: best), left, a, b, line}}
+            else
+              {value, remaining, child_line} =
+                search_line(Game.apply_action(game, move), depth - 1, player, budget, left - 1, deadline, a, b)
+              better = if maximizing, do: value > best, else: value < best
+              best = if maximizing, do: max(best, value), else: min(best, value)
+              line = if better, do: [move | child_line], else: line
+              a = if maximizing, do: max(a, best), else: a
+              b = if maximizing, do: b, else: min(b, best)
+              if a >= b, do: {:halt, {best, remaining, a, b, line}}, else: {:cont, {best, remaining, a, b, line}}
+            end
+          end)
+        {value, left, line}
+      end
     end
   end
 
