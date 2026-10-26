@@ -16,6 +16,16 @@ defmodule GameSimulator.Traversal.BotTest do
     end
   end
 
+  test "medium and hard choose a legal response after the opening move" do
+    initial = Game.new(board())
+    opening = Enum.find(Game.actions(initial), &(&1.piece == "1-0" and &1.row == 7 and &1.col == 2))
+    assert opening != nil
+    state = Game.apply_action(initial, opening)
+    for difficulty <- ["medium", "hard"] do
+      assert Bot.choose(state, difficulty) in Game.actions(state)
+    end
+  end
+
   test "every difficulty takes an immediate Sentinel victory" do
     state = %{game([piece("sentinel", 2, 9, 5, "s"), piece("sentinel", 1, 2, 5, "enemy")]) | turn: 2}
     for difficulty <- ["easy", "medium", "hard"] do
