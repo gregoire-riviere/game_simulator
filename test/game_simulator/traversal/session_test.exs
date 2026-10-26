@@ -21,16 +21,26 @@ defmodule GameSimulator.Traversal.SessionTest do
     assert {:error, :illegal_move} = Session.request(user, {:move, %{params | "row" => 99}})
     assert {:ok, after_human} = Session.request(user, {:move, params})
     assert after_human.game.moves == 1
+    assert length(after_human.log) == 1
+    assert hd(after_human.log).player == 1
+    assert hd(after_human.log).piece == move.piece
+    assert hd(after_human.log).to == [move.row, move.col]
     assert {:error, :stale_game} = Session.request(user, {:move, params})
     # The bot message is processed before this call: one and only one legal reply.
     {:ok, after_bot} = Session.request(user, :get)
     assert after_bot.game.moves == 2
+    assert Enum.map(after_bot.log, & &1.player) == [1, 2]
+    assert Enum.all?(after_bot.log, fn entry ->
+      is_list(entry.from) and length(entry.from) == 2 and
+        is_list(entry.to) and length(entry.to) == 2 and entry.kind in ["move", "attack", "exit"]
+    end)
     assert after_bot.game.turn == 1
     assert after_bot.revision == 2
     assert Game.actions(after_bot.game) == after_bot.legal
     {:ok, replacement} = Session.request(user, {:new, heights, "hard"})
     refute replacement.game_id == initial.game_id
     assert replacement.game.moves == 0
+    assert replacement.log == []
     assert {:error, :stale_game} = Session.request(user, {:move, params})
   end
 
