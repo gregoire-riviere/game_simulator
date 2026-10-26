@@ -26,16 +26,43 @@ defmodule GameSimulator.Traversal.BotTest do
     end
   end
 
-  test "diagnostic returns five candidates with evaluation breakdown without changing the choice" do
-    state = %{game([piece("sentinel", 2, 2, 2, "bot"), piece("sentinel", 1, 7, 7, "human")]) | turn: 2}
-    chosen = Bot.choose(state, "medium")
-    debug = Bot.diagnostic(state, "medium", chosen)
-    assert debug.chosen == chosen
-    assert length(debug.candidates) == 5
-    assert Enum.all?(debug.candidates, fn entry ->
-      entry.move in Game.actions(state) and is_number(entry.static) and
-        is_map(entry.components) and is_boolean(entry.complete)
-    end)
+  test "the bot decision trace is produced by the chosen search, not a replay" do
+    state = %{game([
+      piece("sentinel", 2, 2, 2, "bot"),
+      piece("sentinel", 1, 7, 7, "human")
+    ]) | turn: 2}
+
+    for difficulty <- ["easy", "medium", "hard"] do
+      {chosen, trace} = Bot.choose_with_trace(state, difficulty)
+      assert chosen in Game.actions(state)
+      assert trace.chosen == chosen
+      assert trace.depth >= 1 and trace.depth <= Bot.limits(difficulty).depth
+      assert trace.root_legal >= trace.root_considered
+      assert trace.nodes_used >= 0 and trace.nodes_used <= trace.nodes_limit
+      assert Enum.any?(trace.candidates, &(&1.move == chosen))
+      assert Enum.all?(trace.candidates, fn entry ->
+        entry.move in Game.actions(state) and is_number(entry.static) and
+          is_number(entry.adjusted) and is_integer(entry.nodes) and is_list(entry.pv)
+      end)
+
+      selected = Enum.find(trace.candidates, &(&1.move == chosen))
+      if trace.depth > 1 do
+        assert trace.mode == "search"
+        assert selected.searched == trace.score
+        assert hd(selected.pv) == chosen
+        assert length(selected.pv) <= trace.depth
+        assert trace.root_checked > 0
+      else
+        assert trace.mode == "preselection"
+        assert trace.score == selected.static
+      end
+
+      if trace.interrupted do
+        assert trace.stop == "budget"
+        assert trace.interrupted.depth > trace.depth
+        assert trace.interrupted.checked <= trace.interrupted.total
+      end
+    end
   end
 
   test "every difficulty takes an immediate Sentinel victory" do
