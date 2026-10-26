@@ -35,6 +35,13 @@ defmodule GameSimulator.Traversal.SessionTest do
         is_list(entry.to) and length(entry.to) == 2 and entry.kind in ["move", "attack", "exit"]
     end)
     assert after_bot.game.turn == 1
+    bot_entry = List.last(after_bot.log)
+    assert bot_entry.analysis.chosen.piece == bot_entry.piece
+    assert bot_entry.analysis.chosen.row == Enum.at(bot_entry.to, 0)
+    assert bot_entry.analysis.chosen.col == Enum.at(bot_entry.to, 1)
+    assert Enum.any?(bot_entry.analysis.candidates, &(&1.move == bot_entry.analysis.chosen))
+    refute Map.has_key?(after_bot, :bot_diagnostic)
+    refute Map.has_key?(hd(after_bot.log), :analysis)
     assert after_bot.revision == 2
     assert Game.actions(after_bot.game) == after_bot.legal
     {:ok, replacement} = Session.request(user, {:new, heights, "hard"})
