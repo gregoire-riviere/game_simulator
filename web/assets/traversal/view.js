@@ -16,6 +16,48 @@ export function mountTraversal(page, api) {
   const selection = page.querySelector('#traversal-selection');
   const pieceOptions = page.querySelector('#traversal-pieces');
   const actionOptions = page.querySelector('#traversal-actions');
+  const exportButton = page.querySelector('#traversal-export');
+  const exportStatus = page.querySelector('#traversal-export-status');
+  const exportText = page.querySelector('#traversal-export-text');
+  const exportDetails = page.querySelector('#traversal-export-details');
+  const coord = ([r, c]) => r < 0 || r > 9 ? 'EXIT' : String.fromCharCode(65 + c) + (r + 1);
+  function compactReport() {
+    if (!state?.game) return 'Aucune partie en cours.';
+    const game = state.game;
+    const lines = [
+      'TRAVERSAL replay v1',
+      'Bot=' + state.difficulty + ' variant=' + game.variant + ' seed=' + JSON.stringify(state.seed),
+      'Board=' + game.board.map(row => row.join('')).join('/'),
+      'Forests=' + (game.forests || []).map(p => coord([p.row, p.col])).sort().join(','),
+      'Pieces=' + game.pieces.map(p => p.id + ':' + p.type[0].toUpperCase() + ':' + p.status[0] + ':' + coord([p.row, p.col])).join(','),
+      'Moves=' + game.moves + ' turn=' + game.turn + ' scores=' + game.scores.join('-') +
+        ' result=' + (game.result ? game.result.winner + ':' + game.result.reason : (state.blocked ? 'blocked' : 'ongoing')),
+      'History (H=human,B=bot; M=move,A=attack,E=exit; *=special):'
+    ];
+    (state.log || []).forEach((m, i) => lines.push(
+      (i + 1) + '.' + (m.player === 1 ? 'H' : 'B') + ' ' + m.piece +
+      ' ' + coord(m.from) + '>' + coord(m.to) + ' ' +
+      ({move:'M',attack:'A',exit:'E'}[m.kind] || m.kind) +
+      (m.special ? '*' : '') + ' c' + m.cost +
+      (m.captured ? ' x' + m.captured : '') +
+      (m.attack == null ? '' : ' ' + m.attack + '/' + m.defence)
+    ));
+    return lines.join('\\n');
+  }
+  const copyReport = async () => {
+    const report = compactReport();
+    exportText.value = report;
+    try {
+      await navigator.clipboard.writeText(report);
+      exportStatus.textContent = 'Résumé copié. Collez-le dans ChatGPT.';
+    } catch (_) {
+      exportDetails.open = true;
+      exportText.focus();
+      exportText.select();
+      exportStatus.textContent = 'Copie automatique indisponible : sélectionnez le texte ci-dessous.';
+    }
+  };
+  exportButton.addEventListener('click', copyReport);
   const abort = new AbortController();
   let state = null, selected = null, busy = false, disposed = false, poll = null, generation = 0, errorMessage = '';
   let renderer;
@@ -307,6 +349,7 @@ export function mountTraversal(page, api) {
     fresh.removeEventListener('click', newSeed);
     reset.removeEventListener('click', resetCamera);
     top.removeEventListener('click', topView);
+    exportButton.removeEventListener('click', copyReport);
     controls.dispose();
     disposeGroup(terrain);
     renderer.dispose();
