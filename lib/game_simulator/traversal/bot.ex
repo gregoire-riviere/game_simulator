@@ -15,7 +15,7 @@ defmodule GameSimulator.Traversal.Bot do
     budget = limits(difficulty)
     fields = terrain(game.board, Map.get(game, :forests, []))
     fields = if difficulty == "easy", do: fields, else: Map.put(fields, :interceptions, interceptions(game, fields))
-    budget = Map.put(budget, :terrain, fields)
+    budget = Map.put(budget, :terrain, Map.put(fields, :tactical, difficulty == "hard"))
     deadline = System.monotonic_time(:millisecond) + budget.milliseconds
     ranked_options = ranked(game, game.turn, fields)
     static_scores = Map.new(ranked_options)
@@ -362,7 +362,7 @@ defmodule GameSimulator.Traversal.Bot do
       steps = abs(runner.row - Game.last_row(runner.player))
       # Four ranks is sufficient to include a five-PM Explorer's final sprint;
       # the authoritative exit test below handles relief, forests and blockers.
-      if steps > 4 do
+      if steps > 4 or runner.player == player do
         sum
       else
         candidate = %{game | turn: runner.player}
@@ -387,7 +387,7 @@ defmodule GameSimulator.Traversal.Bot do
             counter_exit?(game, runner)
 
           urgency = if countered, do: div(value, 12), else: value
-          sum + if(runner.player == player, do: urgency, else: -urgency)
+          sum - urgency
         end
       end
     end)
@@ -428,7 +428,8 @@ defmodule GameSimulator.Traversal.Bot do
   def evaluate(game, player, terrain) do
     [a, b] = game.scores
     score = if player == 1, do: a - b, else: b - a
-    interception_score(game, player, terrain) + exit_threat_score(game, player) + score * 500 + Enum.reduce(Game.active(game), 0, fn piece, sum ->
+    tactical = if Map.get(terrain, :tactical, true), do: exit_threat_score(game, player), else: 0
+    interception_score(game, player, terrain) + tactical + score * 500 + Enum.reduce(Game.active(game), 0, fn piece, sum ->
       progress = 9 - abs(piece.row - Game.last_row(piece.player))
       neighbours = Game.neighbours(piece.row, piece.col) |> Enum.map(fn {r, c} -> Game.occupant(game, r, c) end) |> Enum.reject(&is_nil/1)
       support = Enum.count(neighbours, &(&1.player == piece.player))
