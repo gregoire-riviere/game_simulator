@@ -70,6 +70,56 @@ defmodule GameSimulator.Traversal.Bot do
     end)
   end
 
+  # Diagnostic only: independent fixed-width replay, never used to choose a move.
+  # A timeout leaves the searched score absent rather than implying completion.
+  def diagnostic(game, difficulty, chosen) do
+    budget = limits(difficulty)
+    fields = terrain(game.board, Map.get(game, :forests, []))
+    fields = if difficulty == "easy", do: fields, else: Map.put(fields, :interceptions, interceptions(game, fields))
+    budget = Map.put(budget, :terrain, fields)
+    player = game.turn
+    deadline = System.monotonic_time(:millisecond) + budget.milliseconds
+    candidates = ranked(game, player, fields)
+      |> improve_candidates(game, budget.width, deadline)
+      |> Enum.take(5)
+    entries = Enum.map(candidates, fn {move, adjusted} ->
+      after_move = Game.apply_action(game, move)
+      static = evaluate(after_move, player, fields)
+      components = evaluation_components(after_move, player, fields)
+      {searched, complete} = if difficulty == "easy" or after_move.result != nil do
+        {static, true}
+      else
+        {score, left} = search(after_move, budget.depth - 1, player, budget,
+          budget.nodes, deadline, -2_000_000, 2_000_000)
+        {if(exhausted?(left, deadline), do: nil, else: score), not exhausted?(left, deadline)}
+      end
+      %{move: move, static: static, adjusted: adjusted, searched: searched,
+        complete: complete, components: components, chosen: move == chosen}
+    end)
+    %{depth: budget.depth, candidates: entries, chosen: chosen,
+      note: "Independent post-choice diagnostic. Search values can differ from the actual decision due to time budgets; nil means incomplete."}
+  end
+
+  def evaluation_components(%{result: result}, player, _fields) when not is_nil(result),
+    do: %{terminal: if(result.winner == player, do: 1_000_000, else: if(result.winner == 0, do: 0, else: -1_000_000))}
+  def evaluation_components(game, player, fields) do
+    material = Enum.reduce(Game.active(game), 0, fn p, sum ->
+      sign = if p.player == player, do: 1, else: -1
+      sum + sign * p.strength * 65
+    end)
+    progress = Enum.reduce(Game.active(game), 0, fn p, sum ->
+      sign = if p.player == player, do: 1, else: -1
+      advance = 9 - abs(p.row - Game.last_row(p.player))
+      sum + sign * advance * (12 + p.strength * 2)
+    end)
+    [a, b] = game.scores
+    %{material: material, progress: progress,
+      exits: (if player == 1, do: a - b, else: b - a) * 500,
+      interception: interception_score(game, player, fields),
+      other: evaluate(game, player, fields) - material - progress -
+        (if player == 1, do: a - b, else: b - a) * 500 - interception_score(game, player, fields)}
+  end
+
   def exhausted?(nodes, deadline), do: nodes <= 0 or System.monotonic_time(:millisecond) >= deadline
 
   def ranked(game, player), do: ranked(game, player, terrain(game.board, Map.get(game, :forests, [])))
