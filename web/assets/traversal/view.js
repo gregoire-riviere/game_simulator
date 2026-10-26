@@ -29,6 +29,7 @@ export function mountTraversal(page, api) {
     const lines = [
       '    AI depth=' + a.depth + '/' + a.limit_depth +
       ' mode=' + a.mode + ' stop=' + a.stop + ' score=' + a.score +
+      (a.tactical ? ' tactical=' + (a.tactical_alerts || []).join(',') : '') +
       ' nodes=' + a.nodes_used + '/' + a.nodes_limit +
       ' elapsed_ms=' + a.elapsed_ms + ' search_limit_ms=' + a.time_limit_ms +
       ' legal=' + a.root_legal + ' filtered=' + a.root_filtered +
