@@ -272,7 +272,17 @@ defmodule GameSimulator.Traversal.Bot do
       threats = Enum.count(neighbours, fn enemy -> enemy.player != piece.player and Game.combat(game, enemy, piece, 1).attack >= Game.combat(game, enemy, piece, 1).defence end)
       remaining = terrain |> Map.fetch!(piece.player) |> Map.fetch!({piece.row, piece.col})
       travel = round(remaining / piece.movement * 45)
-      sentinel = if piece.type == "sentinel" and game.exited == [], do: progress * 7, else: 0
+      sentinel = if piece.type == "sentinel" and game.exited == [] do
+        urgency = cond do
+          remaining <= piece.movement -> 450
+          remaining <= piece.movement * 2 -> 260
+          remaining <= piece.movement * 4 -> 90
+          true -> 0
+        end
+        progress * 7 + urgency
+      else
+        0
+      end
       value = piece.strength * 65 + progress * (12 + piece.strength * 2) + sentinel + support * 9 - threats * (35 + piece.strength * 15) - travel
       sum + if(piece.player == player, do: value, else: -value)
     end)
