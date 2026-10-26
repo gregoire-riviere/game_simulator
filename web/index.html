@@ -270,6 +270,14 @@
               <button id="traversal-reset" class="leave-table-button" type="button">Réinitialiser la vue</button>
             </div>
           </div>
+          <div class="traversal-camera">
+            <button id="traversal-export" class="leave-table-button" type="button">Copier le résumé de partie</button>
+            <span id="traversal-export-status" role="status" aria-live="polite"></span>
+          </div>
+          <details id="traversal-export-details" class="traversal-data">
+            <summary>Résumé pour feedback (copie manuelle)</summary>
+            <textarea id="traversal-export-text" readonly rows="9" spellcheck="false" style="width:100%;box-sizing:border-box"></textarea>
+          </details>
           <div id="traversal-canvas" class="traversal-canvas"></div>
           <p id="traversal-status" class="traversal-status" role="status" aria-live="polite"></p>
           <p class="traversal-help">Glisser pour tourner · molette ou pincement pour zoomer · un doigt pour tourner sur mobile.</p>
