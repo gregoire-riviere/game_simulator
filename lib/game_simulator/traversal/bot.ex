@@ -145,7 +145,7 @@ defmodule GameSimulator.Traversal.Bot do
     if victims == [] do
       options
     else
-      {head, tail} = Enum.split(options, 48)
+      {head, tail} = Enum.split(options, 28)
       scored = Enum.map(head, fn {move, adjusted} = entry ->
         if exhausted?(1, deadline) do
           {entry, 0}
@@ -170,8 +170,15 @@ defmodule GameSimulator.Traversal.Bot do
   end
 
   defp capturable_next?(game, target) do
-    Game.actions(game)
-    |> Enum.any?(&(&1.kind == "attack" and &1.row == target.row and &1.col == target.col))
+    Game.active(game)
+    |> Enum.filter(fn attacker ->
+      attacker.player == game.turn and
+        abs(attacker.row - target.row) + abs(attacker.col - target.col) <= attacker.movement + 1
+    end)
+    |> Enum.any?(fn attacker ->
+      Game.legal(game, attacker.id)
+      |> Enum.any?(&(&1.kind == "attack" and &1.row == target.row and &1.col == target.col))
+    end)
   end
 
   # The depth-two winner and highest scored alternatives stay in the deeper
