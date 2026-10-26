@@ -42,7 +42,7 @@ export function mountTraversal(page, api) {
       (m.captured ? ' x' + m.captured : '') +
       (m.attack == null ? '' : ' ' + m.attack + '/' + m.defence)
     ));
-    return lines.join('\\n');
+    return lines.join('\n');
   }
   const copyReport = async () => {
     const report = compactReport();
