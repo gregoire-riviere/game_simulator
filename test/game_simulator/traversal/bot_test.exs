@@ -26,6 +26,18 @@ defmodule GameSimulator.Traversal.BotTest do
     end
   end
 
+  test "diagnostic returns five candidates with evaluation breakdown without changing the choice" do
+    state = %{game([piece("sentinel", 2, 2, 2, "bot"), piece("sentinel", 1, 7, 7, "human")]) | turn: 2}
+    chosen = Bot.choose(state, "medium")
+    debug = Bot.diagnostic(state, "medium", chosen)
+    assert debug.chosen == chosen
+    assert length(debug.candidates) == 5
+    assert Enum.all?(debug.candidates, fn entry ->
+      entry.move in Game.actions(state) and is_number(entry.static) and
+        is_map(entry.components) and is_boolean(entry.complete)
+    end)
+  end
+
   test "every difficulty takes an immediate Sentinel victory" do
     state = %{game([piece("sentinel", 2, 9, 5, "s"), piece("sentinel", 1, 2, 5, "enemy")]) | turn: 2}
     for difficulty <- ["easy", "medium", "hard"] do
