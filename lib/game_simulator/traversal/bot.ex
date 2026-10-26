@@ -15,7 +15,8 @@ defmodule GameSimulator.Traversal.Bot do
     budget = limits(difficulty)
     fields = terrain(game.board, Map.get(game, :forests, []))
     fields = if difficulty == "easy", do: fields, else: Map.put(fields, :interceptions, interceptions(game, fields))
-    budget = Map.put(budget, :terrain, Map.put(fields, :tactical, difficulty == "hard"))
+    fields = Map.put(fields, :tactical, difficulty == "hard")
+    budget = Map.put(budget, :terrain, fields)
     deadline = System.monotonic_time(:millisecond) + budget.milliseconds
     ranked_options = ranked(game, game.turn, fields)
     static_scores = Map.new(ranked_options)
