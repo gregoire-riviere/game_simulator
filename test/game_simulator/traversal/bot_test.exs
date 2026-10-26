@@ -50,7 +50,7 @@ defmodule GameSimulator.Traversal.BotTest do
 
   test "candidate ordering discourages returning to the previous own position" do
     initial = game([piece("sentinel", 2, 4, 4, "bot"), piece("explorer", 1, 9, 9, "other")])
-    previous = %{initial | turn: 2}
+    previous = %{initial | turn: 1}
     state = %{initial | turn: 2, pieces: [piece("sentinel", 2, 4, 5, "bot"), piece("explorer", 1, 9, 9, "other")],
       history: [Game.position(previous), Game.position(previous)]}
     reversal = Enum.find(Game.actions(state), &(&1.piece == "bot" and &1.row == 4 and &1.col == 4))
