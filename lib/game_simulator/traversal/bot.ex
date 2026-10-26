@@ -6,42 +6,100 @@ defmodule GameSimulator.Traversal.Bot do
   def limits("medium"), do: %{depth: 2, width: 12, nodes: 500, milliseconds: 800}
   def limits("hard"), do: %{depth: 3, width: 18, nodes: 2500, milliseconds: 1600}
 
-  def choose(game, difficulty) do
+  # Keep the simple API for existing callers. The session records the exact trace
+  # returned by the same search that selected the action.
+  def choose(game, difficulty), do: elem(choose_with_trace(game, difficulty), 0)
+
+  def choose_with_trace(game, difficulty) do
+    started = System.monotonic_time(:millisecond)
     budget = limits(difficulty)
     fields = terrain(game.board, Map.get(game, :forests, []))
     fields = if difficulty == "easy", do: fields, else: Map.put(fields, :interceptions, interceptions(game, fields))
     budget = Map.put(budget, :terrain, fields)
     deadline = System.monotonic_time(:millisecond) + budget.milliseconds
-    options = ranked(game, game.turn, budget.terrain)
-    options = if difficulty == "easy", do: options, else: defend(game, improve_candidates(options, game, budget.width, deadline), deadline)
+    ranked_options = ranked(game, game.turn, fields)
+    static_scores = Map.new(ranked_options)
+    options = if difficulty == "easy", do: ranked_options,
+      else: defend(game, improve_candidates(ranked_options, game, budget.width, deadline), deadline)
+
     case options do
-      [] -> nil
-      [{fallback, _score} | _rest] ->
-        if difficulty == "easy" do
-          fallback
-        else
-          # Only compare completed iterations at the same depth. A partial deeper
-          # search must not replace a fully checked shallower defensive choice.
-          {best, _nodes} = Enum.reduce_while(2..budget.depth, {fallback, budget.nodes}, fn depth, {previous, nodes} ->
-            candidates = Enum.take(options, budget.width)
-            {best, _score, left, complete} = Enum.reduce_while(candidates, {previous, -2_000_000, nodes, true}, fn {move, _estimate}, {best, score, nodes, _complete} ->
-              if exhausted?(nodes, deadline) do
-                {:halt, {best, score, nodes, false}}
+      [] -> {nil, nil}
+      [{fallback, _} | _] ->
+        candidates = Enum.take(options, budget.width)
+        initial = {fallback, 1, [], nil, budget.nodes, "preselection"}
+        {chosen, depth, scored, last_attempt, remaining, stop} =
+          if difficulty == "easy" do
+            initial
+          else
+            # Do not replace a fully validated depth with an incomplete iteration.
+            Enum.reduce_while(2..budget.depth, initial, fn level, {previous, previous_depth, previous_scores, _, nodes, _} ->
+              {best, results, left, complete, win} = search_roots(game, candidates, level, budget, nodes, deadline)
+              attempt = %{depth: level, checked: Enum.count(results, &(&1.searched != nil)), total: length(candidates)}
+              if complete do
+                {:cont, {best, level, results, attempt, left, if(win, do: "proven_win", else: "complete")}}
               else
-                {value, left} = search(Game.apply_action(game, move), depth - 1, game.turn, budget, nodes - 1, deadline, -2_000_000, 2_000_000)
-                cond do
-                  exhausted?(left, deadline) -> {:halt, {best, score, left, false}}
-                  value == 1_000_000 -> {:halt, {move, value, left, true}}
-                  value > score -> {:cont, {move, value, left, true}}
-                  true -> {:cont, {best, score, left, true}}
-                end
+                {:halt, {previous, previous_depth, previous_scores, attempt, left, "budget"}}
               end
             end)
-            if complete, do: {:cont, {best, left}}, else: {:halt, {previous, left}}
+          end
+
+        # Report the best actual root comparisons, ALWAYS including the chosen
+        # move even if it was not in the first five by searched score.
+        entries = if scored == [] do
+          Enum.map(Enum.take(candidates, 5), fn {move, adjusted} ->
+            %{move: move, adjusted: adjusted, searched: nil, nodes: 0, pv: []}
           end)
-          best
+        else
+          Enum.sort_by(scored, fn item ->
+            {-item.searched, item.move.piece, item.move.row, item.move.col}
+          end) |> Enum.take(5)
         end
+        chosen_entry = Enum.find(scored, &(&1.move == chosen))
+        entries = if Enum.any?(entries, &(&1.move == chosen)), do: entries,
+          else: entries ++ [chosen_entry || %{
+            move: chosen, adjusted: elem(Enum.find(candidates, fn {move, _} -> move == chosen end), 1),
+            searched: nil, nodes: 0, pv: []
+          }]
+        entries = Enum.map(entries, fn entry ->
+          Map.put(entry, :static, Map.fetch!(static_scores, entry.move))
+        end)
+        score = if chosen_entry, do: chosen_entry.searched, else: Map.fetch!(static_scores, chosen)
+        trace = %{
+          chosen: chosen, score: score, depth: depth, limit_depth: budget.depth,
+          mode: if(depth == 1, do: "preselection", else: "search"),
+          stop: stop, interrupted: if(stop == "budget", do: last_attempt, else: nil),
+          root_legal: length(ranked_options), root_considered: length(candidates),
+          root_checked: length(scored), nodes_used: budget.nodes - remaining,
+          nodes_limit: budget.nodes, elapsed_ms: System.monotonic_time(:millisecond) - started,
+          time_limit_ms: budget.milliseconds, candidates: entries
+        }
+        {chosen, trace}
     end
+  end
+
+  defp search_roots(game, candidates, depth, budget, nodes, deadline) do
+    {best, _score, left, entries, complete, win} =
+      Enum.reduce_while(candidates, {nil, -2_000_000, nodes, [], true, false}, fn {move, adjusted}, {best, score, left, entries, _, _} ->
+        if exhausted?(left, deadline) do
+          {:halt, {best, score, left, entries, false, false}}
+        else
+          {value, remaining, line, finished} =
+            search_line(Game.apply_action(game, move), depth - 1, game.turn, budget, left - 1, deadline, -2_000_000, 2_000_000)
+          valid = finished and not exhausted?(remaining, deadline)
+          entry = %{
+            move: move, adjusted: adjusted, searched: if(valid, do: value, else: nil),
+            nodes: left - remaining, pv: if(valid, do: [move | line], else: [])
+          }
+          entries = [entry | entries]
+          cond do
+            not valid -> {:halt, {best, score, remaining, entries, false, false}}
+            value == 1_000_000 -> {:halt, {move, value, remaining, entries, true, true}}
+            value > score -> {:cont, {move, value, remaining, entries, true, false}}
+            true -> {:cont, {best, score, remaining, entries, true, false}}
+          end
+        end
+      end)
+    {best, Enum.reverse(entries), left, complete, win}
   end
 
   # Only re-evaluate the promising root choices to preserve the response budget.
@@ -68,36 +126,6 @@ defmodule GameSimulator.Traversal.Bot do
     Enum.sort_by(rescored ++ tail, fn {move, value} ->
       {-value, move.piece, move.row, move.col}
     end)
-  end
-
-  # Diagnostic only: independent fixed-width replay, never used to choose a move.
-  # A timeout leaves the searched score absent rather than implying completion.
-  def diagnostic(game, difficulty, chosen) do
-    budget = limits(difficulty)
-    fields = terrain(game.board, Map.get(game, :forests, []))
-    fields = if difficulty == "easy", do: fields, else: Map.put(fields, :interceptions, interceptions(game, fields))
-    budget = Map.put(budget, :terrain, fields)
-    player = game.turn
-    deadline = System.monotonic_time(:millisecond) + budget.milliseconds
-    candidates = ranked(game, player, fields)
-      |> improve_candidates(game, budget.width, deadline)
-      |> Enum.take(5)
-    entries = Enum.map(candidates, fn {move, adjusted} ->
-      after_move = Game.apply_action(game, move)
-      static = evaluate(after_move, player, fields)
-      components = evaluation_components(after_move, player, fields)
-      {searched, complete} = if difficulty == "easy" or after_move.result != nil do
-        {static, true}
-      else
-        {score, left} = search(after_move, budget.depth - 1, player, budget,
-          budget.nodes, deadline, -2_000_000, 2_000_000)
-        {if(exhausted?(left, deadline), do: nil, else: score), not exhausted?(left, deadline)}
-      end
-      %{move: move, static: static, adjusted: adjusted, searched: searched,
-        complete: complete, components: components, chosen: move == chosen}
-    end)
-    %{depth: budget.depth, candidates: entries, chosen: chosen,
-      note: "Independent post-choice diagnostic. Search values can differ from the actual decision due to time budgets; nil means incomplete."}
   end
 
   def evaluation_components(%{result: result}, player, _fields) when not is_nil(result),
@@ -280,30 +308,50 @@ defmodule GameSimulator.Traversal.Bot do
     end)
   end
 
-  # Beam width, depth, node budget and a monotonic deadline all bound the search.
+  # Preserve the public search/8 return shape while collecting the actual
+  # principal line inside the search used by choose_with_trace/2.
   def search(game, depth, player, budget, nodes, deadline, alpha, beta) do
-    if depth == 0 or game.result != nil or exhausted?(nodes, deadline) do
-      {evaluate(game, player, budget.terrain), nodes}
-    else
-      maximizing = game.turn == player
-      choices = ranked(game, game.turn, budget.terrain) |> Enum.take(budget.width)
-      if choices == [] do
-        {evaluate(game, player, budget.terrain), nodes}
-      else
-        initial = if maximizing, do: -2_000_000, else: 2_000_000
-        {value, left, _alpha, _beta} = Enum.reduce_while(choices, {initial, nodes, alpha, beta}, fn {move, _estimate}, {best, left, a, b} ->
-          if exhausted?(left, deadline) do
-            {:halt, {if(best == initial, do: evaluate(game, player, budget.terrain), else: best), left, a, b}}
-          else
-            {value, remaining} = search(Game.apply_action(game, move), depth - 1, player, budget, left - 1, deadline, a, b)
-            best = if maximizing, do: max(best, value), else: min(best, value)
-            a = if maximizing, do: max(a, best), else: a
-            b = if maximizing, do: b, else: min(b, best)
-            if a >= b, do: {:halt, {best, remaining, a, b}}, else: {:cont, {best, remaining, a, b}}
-          end
-        end)
-        {value, left}
-      end
+    {value, left, _line, _complete} = search_line(game, depth, player, budget, nodes, deadline, alpha, beta)
+    {value, left}
+  end
+
+  # A cutoff from alpha-beta is a valid completed bound; a budget interruption
+  # is not. Never expose a partial subtree value as a searched candidate score.
+  defp search_line(game, depth, player, budget, nodes, deadline, alpha, beta) do
+    cond do
+      depth == 0 or game.result != nil ->
+        {evaluate(game, player, budget.terrain), nodes, [], true}
+      exhausted?(nodes, deadline) ->
+        {evaluate(game, player, budget.terrain), nodes, [], false}
+      true ->
+        maximizing = game.turn == player
+        choices = ranked(game, game.turn, budget.terrain) |> Enum.take(budget.width)
+        if choices == [] do
+          {evaluate(game, player, budget.terrain), nodes, [], true}
+        else
+          initial = if maximizing, do: -2_000_000, else: 2_000_000
+          {best, left, _a, _b, line, complete} =
+            Enum.reduce_while(choices, {initial, nodes, alpha, beta, [], true}, fn {move, _}, {best, left, a, b, line, _} ->
+              if exhausted?(left, deadline) do
+                {:halt, {best, left, a, b, line, false}}
+              else
+                {value, remaining, child_line, finished} =
+                  search_line(Game.apply_action(game, move), depth - 1, player, budget, left - 1, deadline, a, b)
+                if not finished do
+                  {:halt, {best, remaining, a, b, line, false}}
+                else
+                  better = if maximizing, do: value > best, else: value < best
+                  best = if better, do: value, else: best
+                  line = if better, do: [move | child_line], else: line
+                  a = if maximizing, do: max(a, best), else: a
+                  b = if maximizing, do: b, else: min(b, best)
+                  result = {best, remaining, a, b, line, true}
+                  if a >= b, do: {:halt, result}, else: {:cont, result}
+                end
+              end
+            end)
+          {if(best == initial, do: evaluate(game, player, budget.terrain), else: best), left, line, complete}
+        end
     end
   end
 
