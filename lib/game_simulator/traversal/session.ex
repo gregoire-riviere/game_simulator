@@ -29,7 +29,7 @@ defmodule GameSimulator.Traversal.Session do
   def handle_call({:new, board, difficulty, seed}, from, state), do: handle_call({:new, board, difficulty, seed, "classic"}, from, state)
   def handle_call({:new, board, difficulty, seed, variant}, _from, state) do
     if Game.valid_board?(board) and difficulty in ["easy", "medium", "hard"] and Variant.valid?(variant, seed) do
-      next = %{game: Game.new(board, variant, seed), seed: seed, difficulty: difficulty, revision: 0, log: [], bot_diagnostic: nil, id: Base.url_encode64(:crypto.strong_rand_bytes(18), padding: false)}
+      next = %{game: Game.new(board, variant, seed), seed: seed, difficulty: difficulty, revision: 0, log: [], id: Base.url_encode64(:crypto.strong_rand_bytes(18), padding: false)}
       {:reply, {:ok, public(next)}, next, 1_800_000}
     else
       {:reply, {:error, :invalid_game}, state, 1_800_000}
@@ -52,11 +52,10 @@ defmodule GameSimulator.Traversal.Session do
   end
 
   def handle_info({:bot, id, revision}, %{id: id, revision: revision, game: %{turn: 2, result: nil}} = state) do
-    case Bot.choose(state.game, state.difficulty) do
-      nil -> {:noreply, state, 1_800_000}
-      move ->
-        diagnostic = Bot.diagnostic(state.game, state.difficulty, move)
-        next = %{record(state, Game.apply_action(state.game, move), move) | bot_diagnostic: diagnostic}
+    case Bot.choose_with_trace(state.game, state.difficulty) do
+      {nil, _} -> {:noreply, state, 1_800_000}
+      {move, analysis} ->
+        next = record(state, Game.apply_action(state.game, move), move, analysis)
         {:noreply, next, 1_800_000}
     end
   end
@@ -64,13 +63,14 @@ defmodule GameSimulator.Traversal.Session do
   def handle_info(:timeout, state), do: {:stop, :normal, state}
 
   # Keep action provenance before it disappears from the board (captures and exits).
-  defp record(state, game, move) do
+  defp record(state, game, move, analysis \\ nil) do
     piece = Enum.find(state.game.pieces, &(&1.id == move.piece))
     victim = Game.occupant(state.game, move.row, move.col)
     entry = %{player: piece.player, piece: piece.id, from: [piece.row, piece.col],
       to: [move.row, move.col], kind: move.kind, special: move.special,
       cost: move.cost, captured: if(victim, do: victim.id, else: nil),
       attack: Map.get(move, :attack), defence: Map.get(move, :defence)}
+    entry = if analysis, do: Map.put(entry, :analysis, analysis), else: entry
     %{state | game: game, revision: state.revision + 1, log: state.log ++ [entry]}
   end
 
@@ -78,6 +78,6 @@ defmodule GameSimulator.Traversal.Session do
   def public(state) do
     actions = Game.actions(state.game)
     game = Map.drop(state.game, [:history])
-    %{game: game, seed: state.seed, game_id: state.id, revision: state.revision, difficulty: state.difficulty, log: state.log, bot_diagnostic: state.bot_diagnostic, legal: if(game.turn == 1, do: actions, else: []), thinking: game.turn == 2 and game.result == nil and actions != [], blocked: game.result == nil and actions == []}
+    %{game: game, seed: state.seed, game_id: state.id, revision: state.revision, difficulty: state.difficulty, log: state.log, legal: if(game.turn == 1, do: actions, else: []), thinking: game.turn == 2 and game.result == nil and actions != [], blocked: game.result == nil and actions == []}
   end
 end
