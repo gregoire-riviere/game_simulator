@@ -65,6 +65,79 @@ defmodule GameSimulator.Traversal.BotTest do
     end
   end
 
+  # A real replay in which two Explorers reached the exit unchallenged.
+  # Indexes are 0-based in engine actions, while reports show A1..J10.
+  defp explorer_rush_replay(ply) do
+    rows = "3344333445/3333333444/4433333444/4432233444/4433233444/4443323344/4443322344/4443333344/4443333333/5443334433"
+    heights = rows |> String.split("/") |> Enum.map(fn row ->
+      row |> String.graphemes() |> Enum.map(&String.to_integer/1)
+    end)
+    forests = for square <- ["D7", "D8", "E7", "E8", "F3", "F4", "G3", "G4"] do
+      <<column::utf8, row::binary>> = square
+      %{row: String.to_integer(row) - 1, col: column - ?A}
+    end
+    opening = [
+      {"1-1", "C8"}, {"2-5", "H4"}, {"1-0", "B8"}, {"2-5", "H6"},
+      {"1-2", "F8"}, {"2-5", "H7"}, {"1-2", "F5"}, {"2-0", "C3"},
+      {"1-2", "I4"}, {"2-1", "D3"}, {"1-2", :exit}, {"2-2", "D4"},
+      {"1-3", "J9"}, {"2-3", "E4"}, {"1-3", "J5"}
+    ]
+
+    Enum.reduce(Enum.take(opening, ply), %{Game.new(heights, "forests", "2626996510") | forests: forests}, fn {id, square}, state ->
+      action = case square do
+        :exit -> Enum.find(Game.legal(state, id), &(&1.kind == "exit"))
+        <<column::utf8, row::binary>> ->
+          r = String.to_integer(row) - 1
+          c = column - ?A
+          Enum.find(Game.legal(state, id), &(&1.row == r and &1.col == c))
+      end
+      assert action != nil, "#{id} -> #{inspect(square)} should be legal at move #{state.moves + 1}"
+      Game.apply_action(state, action)
+    end)
+  end
+
+  defp move_to(game, id, square) do
+    <<column::utf8, row::binary>> = square
+    action = Enum.find(Game.legal(game, id), &(&1.row == String.to_integer(row) - 1 and &1.col == column - ?A))
+    assert action != nil, "#{id} -> #{square} must be legal"
+    action
+  end
+
+  test "Explorer sprint at ply eight rewards a real interception, not passive development" do
+    state = explorer_rush_replay(7)
+    assert state.turn == 2
+    defended = state |> Game.apply_action(move_to(state, "2-4", "H3"))
+    passive = state |> Game.apply_action(move_to(state, "2-0", "C3"))
+    arrival_defended = Game.apply_action(defended, move_to(defended, "1-2", "I4"))
+    arrival_passive = Game.apply_action(passive, move_to(passive, "1-2", "I4"))
+    assert Enum.any?(Game.legal(arrival_defended, "2-4"), fn action ->
+      action.kind == "attack" and action.row == 3 and action.col == 8
+    end)
+    assert Bot.evaluate(arrival_defended, 2) > Bot.evaluate(arrival_passive, 2) + 400
+  end
+
+  test "after the first Explorer exit, depth-two horizons must detect the second winning exit" do
+    state = explorer_rush_replay(15)
+    assert state.turn == 2
+    assert state.scores == [1, 0]
+    unsafe = Game.apply_action(state, move_to(state, "2-4", "E3"))
+    guard = Game.apply_action(state, move_to(state, "2-4", "I2"))
+    about_to_win = Game.apply_action(unsafe, move_to(unsafe, "1-3", "I1"))
+    assert Bot.evaluate(about_to_win, 2) < -500_000
+    refute Enum.any?(Game.legal(guard, "1-3"), &(&1.row == 0 and &1.col == 8))
+    guarded = Game.apply_action(guard, move_to(guard, "1-3", "J1"))
+    assert Enum.any?(Game.legal(guarded, "2-4"), fn move ->
+      move.kind == "attack" and move.row == 0 and move.col == 9
+    end)
+    assert Bot.evaluate(guarded, 2) > Bot.evaluate(about_to_win, 2) + 500_000
+
+    # Check the actual decision, not a separately re-run post-choice diagnostic.
+    {chosen, trace} = Bot.choose_with_trace(state, "hard")
+    refute chosen.piece == "2-4" and chosen.row == 2 and chosen.col == 4,
+      "hard should not abandon the exit corridor with E3"
+    assert trace.chosen == chosen
+  end
+
   test "every difficulty takes an immediate Sentinel victory" do
     state = %{game([piece("sentinel", 2, 9, 5, "s"), piece("sentinel", 1, 2, 5, "enemy")]) | turn: 2}
     for difficulty <- ["easy", "medium", "hard"] do
