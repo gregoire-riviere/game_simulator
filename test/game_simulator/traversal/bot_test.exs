@@ -114,6 +114,19 @@ defmodule GameSimulator.Traversal.BotTest do
       action.kind == "attack" and action.row == 3 and action.col == 8
     end)
     assert Bot.evaluate(arrival_defended, 2) > Bot.evaluate(arrival_passive, 2) + 400
+
+    # A better static score is not enough: verify the move the live bot takes.
+    {chosen, trace} = Bot.choose_with_trace(state, "hard")
+    assert chosen == trace.chosen
+    response = Game.apply_action(state, chosen)
+    case Enum.find(Game.legal(response, "1-2"), &(&1.row == 3 and &1.col == 8)) do
+      nil -> :ok # The sprint itself was stopped.
+      sprint ->
+        after_sprint = Game.apply_action(response, sprint)
+        assert Enum.any?(Game.actions(after_sprint), fn action ->
+          action.kind == "attack" and action.row == 3 and action.col == 8
+        end), "hard must retain a legal interception after F5>I4, got #{inspect(chosen)}"
+    end
   end
 
   test "after the first Explorer exit, depth-two horizons must detect the second winning exit" do
