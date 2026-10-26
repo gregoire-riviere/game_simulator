@@ -13,7 +13,7 @@ defmodule GameSimulator.Traversal.Bot do
     budget = Map.put(budget, :terrain, fields)
     deadline = System.monotonic_time(:millisecond) + budget.milliseconds
     options = ranked(game, game.turn, budget.terrain)
-    options = if difficulty == "easy", do: options, else: defend(game, options, deadline)
+    options = if difficulty == "easy", do: options, else: options |> improve_candidates(game, budget.width, deadline) |> defend(game, deadline)
     case options do
       [] -> nil
       [{fallback, _score} | _rest] ->
@@ -42,6 +42,32 @@ defmodule GameSimulator.Traversal.Bot do
           best
         end
     end
+  end
+
+  # Only re-evaluate the promising root choices to preserve the response budget.
+  # Captures are checked with the real movement and combat rules.
+  def improve_candidates(options, game, width, deadline) do
+    {head, tail} = Enum.split(options, max(width * 2, 24))
+    rescored = Enum.map(head, fn {move, value} ->
+      next = Game.apply_action(game, move)
+      moved = Enum.find(next.pieces, &(&1.id == move.piece))
+      exposed = if next.result == nil and moved.status == "active" and
+        not exhausted?(1, deadline) do
+        Enum.any?(Game.actions(next), fn reply ->
+          reply.kind == "attack" and reply.row == moved.row and reply.col == moved.col
+        end)
+      else
+        false
+      end
+      capture_penalty = if exposed, do: 280 + moved.strength * 160, else: 0
+      # A two-ply reversal returns to the board before the previous own move.
+      repeated = Enum.at(game.history, -2) == Game.position(next)
+      reversal_penalty = if repeated, do: 260, else: 0
+      {move, value - capture_penalty - reversal_penalty}
+    end)
+    Enum.sort_by(rescored ++ tail, fn {move, value} ->
+      {-value, move.piece, move.row, move.col}
+    end)
   end
 
   def exhausted?(nodes, deadline), do: nodes <= 0 or System.monotonic_time(:millisecond) >= deadline
