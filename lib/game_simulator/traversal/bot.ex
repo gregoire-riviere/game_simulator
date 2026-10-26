@@ -13,7 +13,7 @@ defmodule GameSimulator.Traversal.Bot do
     budget = Map.put(budget, :terrain, fields)
     deadline = System.monotonic_time(:millisecond) + budget.milliseconds
     options = ranked(game, game.turn, budget.terrain)
-    options = if difficulty == "easy", do: options, else: options |> improve_candidates(game, budget.width, deadline) |> defend(game, deadline)
+    options = if difficulty == "easy", do: options, else: defend(game, improve_candidates(options, game, budget.width, deadline), deadline)
     case options do
       [] -> nil
       [{fallback, _score} | _rest] ->
