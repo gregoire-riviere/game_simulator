@@ -348,6 +348,78 @@ defmodule GameSimulator.Traversal.Bot do
     end
   end
 
+  # Resolve imminent exits with the official legal-move and combat rules.
+  # This is a selective one-ply tactical extension at evaluation leaves: it is
+  # only activated for units close enough to leave on their NEXT turn. This
+  # catches Explorer threats that a depth-two horizon would otherwise miss.
+  #
+  # A looming second exit (or first Sentinel exit) is decisive only if the
+  # defender cannot capture the runner or win immediately on its own move.
+  defp exit_threat_score(game, player) do
+    game
+    |> Game.active()
+    |> Enum.reduce(0, fn runner, sum ->
+      steps = abs(runner.row - Game.last_row(runner.player))
+      # Four ranks is sufficient to include a five-PM Explorer's final sprint;
+      # the authoritative exit test below handles relief, forests and blockers.
+      if steps > 4 do
+        sum
+      else
+        candidate = %{game | turn: runner.player}
+          |> Game.legal(runner.id)
+          |> Enum.find(&(&1.kind == "exit"))
+
+        if candidate == nil do
+          sum
+        else
+          after_exit = Game.apply_action(%{game | turn: runner.player}, candidate)
+          value =
+            case after_exit.result do
+              %{winner: winner} when winner == runner.player -> 900_000
+              %{winner: winner} when winner != runner.player -> 0
+              _ -> 1_100
+            end
+
+          # Capturing the runner this turn is a real legal defence, so score
+          # the threat less urgently. Without this check the bot avoids useful
+          # interception squares (e.g. Vanguard I2 against an Explorer at J1).
+          countered = game.turn != runner.player and
+            counter_exit?(game, runner)
+
+          urgency = if countered, do: div(value, 12), else: value
+          sum + if(runner.player == player, do: urgency, else: -urgency)
+        end
+      end
+    end)
+  end
+
+  defp counter_exit?(game, runner) do
+    # Check the defender's immediate winning exit and legal attacks. Only
+    # nearby attackers need full pathfinding, which keeps leaf checks bounded.
+    Game.active(game)
+    |> Enum.filter(&(&1.player == game.turn))
+    |> Enum.any?(fn defender ->
+      distance = abs(defender.row - runner.row) + abs(defender.col - runner.col)
+      if distance > defender.movement + 1 and
+        abs(defender.row - Game.last_row(defender.player)) > defender.movement do
+        false
+      else
+        Game.legal(game, defender.id)
+        |> Enum.any?(fn reply ->
+          cond do
+            reply.kind == "attack" -> reply.row == runner.row and reply.col == runner.col
+            reply.kind == "exit" ->
+              case Game.apply_action(game, reply).result do
+                %{winner: winner} -> winner == game.turn
+                _ -> false
+              end
+            true -> false
+          end
+        end)
+      end
+    end)
+  end
+
   # Terminal outcomes dominate every positional term, including a first Sentinel exit.
   def evaluate(game, player), do: evaluate(game, player, terrain(game.board, Map.get(game, :forests, [])))
   def evaluate(%{result: %{winner: winner}}, player, _terrain) do
@@ -356,7 +428,7 @@ defmodule GameSimulator.Traversal.Bot do
   def evaluate(game, player, terrain) do
     [a, b] = game.scores
     score = if player == 1, do: a - b, else: b - a
-    interception_score(game, player, terrain) + score * 500 + Enum.reduce(Game.active(game), 0, fn piece, sum ->
+    interception_score(game, player, terrain) + exit_threat_score(game, player) + score * 500 + Enum.reduce(Game.active(game), 0, fn piece, sum ->
       progress = 9 - abs(piece.row - Game.last_row(piece.player))
       neighbours = Game.neighbours(piece.row, piece.col) |> Enum.map(fn {r, c} -> Game.occupant(game, r, c) end) |> Enum.reject(&is_nil/1)
       support = Enum.count(neighbours, &(&1.player == piece.player))
