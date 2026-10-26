@@ -4,7 +4,7 @@ defmodule GameSimulator.Traversal.Bot do
 
   def limits("easy"), do: %{depth: 1, width: 1, nodes: 0, milliseconds: 0}
   def limits("medium"), do: %{depth: 2, width: 12, nodes: 500, milliseconds: 800}
-  def limits("hard"), do: %{depth: 3, width: 18, nodes: 2500, milliseconds: 1800}
+  def limits("hard"), do: %{depth: 3, width: 18, nodes: 2500, milliseconds: 1600}
 
   # Keep the simple API for existing callers. The session records the exact trace
   # returned by the same search that selected the action.
