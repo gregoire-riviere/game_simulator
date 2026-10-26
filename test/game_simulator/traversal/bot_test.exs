@@ -34,6 +34,33 @@ defmodule GameSimulator.Traversal.BotTest do
     assert Bot.evaluate(%{state | result: %{winner: 1}}, 2) < -999_999
   end
 
+  test "candidate ordering penalizes a genuinely capturable moved piece" do
+    state = %{game([
+      piece("vanguard", 2, 4, 4, "bot"),
+      piece("sentinel", 1, 3, 6, "enemy"),
+      piece("explorer", 1, 9, 9, "other")
+    ]) | turn: 2}
+    dangerous = Enum.find(Game.actions(state), &(&1.piece == "bot" and &1.row == 4 and &1.col == 5))
+    safe = Enum.find(Game.actions(state), &(&1.piece == "bot" and &1.row == 5 and &1.col == 4))
+    assert dangerous != nil and safe != nil
+    ordered = Bot.improve_candidates([{dangerous, 100}, {safe, 100}], state, 12,
+      System.monotonic_time(:millisecond) + 10_000)
+    assert hd(ordered) |> elem(0) == safe
+  end
+
+  test "candidate ordering discourages returning to the previous own position" do
+    initial = game([piece("sentinel", 2, 4, 4, "bot"), piece("explorer", 1, 9, 9, "other")])
+    previous = %{initial | turn: 2}
+    state = %{initial | turn: 2, pieces: [piece("sentinel", 2, 4, 5, "bot"), piece("explorer", 1, 9, 9, "other")],
+      history: [Game.position(previous), Game.position(previous)]}
+    reversal = Enum.find(Game.actions(state), &(&1.piece == "bot" and &1.row == 4 and &1.col == 4))
+    forward = Enum.find(Game.actions(state), &(&1.piece == "bot" and &1.row == 4 and &1.col == 6))
+    assert reversal != nil and forward != nil
+    options = Bot.improve_candidates([{reversal, 100}, {forward, 100}], state, 12,
+      System.monotonic_time(:millisecond) + 10_000)
+    assert hd(options) |> elem(0) == forward
+  end
+
   test "terminal and immobilized states produce no move" do
     state = %{Game.new(board()) | result: %{winner: 1, reason: "test"}}
     assert Bot.choose(state, "hard") == nil
