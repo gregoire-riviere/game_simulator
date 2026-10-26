@@ -365,20 +365,14 @@ defmodule GameSimulator.Traversal.Bot do
       if steps > 4 or runner.player == player do
         sum
       else
-        candidate = %{game | turn: runner.player}
+        can_exit = %{game | turn: runner.player}
           |> Game.legal(runner.id)
-          |> Enum.find(&(&1.kind == "exit"))
+          |> Enum.any?(&(&1.kind == "exit"))
 
-        if candidate == nil do
+        if not can_exit do
           sum
         else
-          after_exit = Game.apply_action(%{game | turn: runner.player}, candidate)
-          value =
-            case after_exit.result do
-              %{winner: winner} when winner == runner.player -> 900_000
-              %{winner: winner} when winner != runner.player -> 0
-              _ -> 1_100
-            end
+          value = exit_value(game, runner)
 
           # Capturing the runner this turn is a real legal defence, so score
           # the threat less urgently. Without this check the bot avoids useful
@@ -391,6 +385,19 @@ defmodule GameSimulator.Traversal.Bot do
         end
       end
     end)
+  end
+
+  # Exit outcome only depends on the already exited units and the runner's
+  # strength/type, not on the exit square. Avoid creating simulated histories
+  # for every static evaluation in the search tree.
+  defp exit_value(game, runner) do
+    case game.exited do
+      [] -> if runner.type == "sentinel", do: 900_000, else: 1_100
+      _ ->
+        own = Enum.at(game.scores, runner.player - 1)
+        opponent = Enum.at(game.scores, 2 - runner.player)
+        if own + runner.strength > opponent, do: 900_000, else: 0
+    end
   end
 
   defp counter_exit?(game, runner) do
@@ -408,11 +415,7 @@ defmodule GameSimulator.Traversal.Bot do
         |> Enum.any?(fn reply ->
           cond do
             reply.kind == "attack" -> reply.row == runner.row and reply.col == runner.col
-            reply.kind == "exit" ->
-              case Game.apply_action(game, reply).result do
-                %{winner: winner} -> winner == game.turn
-                _ -> false
-              end
+            reply.kind == "exit" -> exit_value(game, defender) == 900_000
             true -> false
           end
         end)
