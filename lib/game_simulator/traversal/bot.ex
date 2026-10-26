@@ -128,8 +128,7 @@ defmodule GameSimulator.Traversal.Bot do
 
     imminent_exit = Game.active(game)
       |> Enum.any?(fn piece ->
-        piece.player == opponent and
-          (piece.type == "sentinel" or game.exited != []) and
+        piece.player == opponent and game.exited != [] and
           abs(piece.row - Game.last_row(opponent)) <=
             (if piece.type == "explorer", do: 3, else: 2)
       end)
