@@ -20,8 +20,12 @@ defmodule GameSimulator.Traversal.Bot do
     deadline = System.monotonic_time(:millisecond) + budget.milliseconds
     ranked_options = ranked(game, game.turn, fields)
     static_scores = Map.new(ranked_options)
+    medium_alerts = if difficulty == "medium", do: tactical_alerts(game), else: []
     options = if difficulty == "easy", do: ranked_options,
       else: defend(game, improve_candidates(ranked_options, game, budget.width, deadline), deadline)
+    options = if medium_alerts == [], do: options,
+      else: protect_threatened_pieces(game, options, medium_alerts, deadline)
+    depth_limit = if difficulty == "medium" and medium_alerts != [], do: 3, else: budget.depth
 
     case options do
       [] -> {nil, nil}
@@ -33,9 +37,15 @@ defmodule GameSimulator.Traversal.Bot do
             initial
           else
             # Do not replace a fully validated depth with an incomplete iteration.
-            Enum.reduce_while(2..budget.depth, initial, fn level, {previous, previous_depth, previous_scores, _, nodes, _} ->
-              {best, results, left, complete, win} = search_roots(game, candidates, level, budget, nodes, deadline)
-              attempt = %{depth: level, checked: Enum.count(results, &(&1.searched != nil)), total: length(candidates)}
+            Enum.reduce_while(2..depth_limit, initial, fn level, {previous, previous_depth, previous_scores, _, nodes, _} ->
+              # Medium explores a third ply only for concrete tactical alarms.
+              # Six root choices with a five-wide reply search stay within its
+              # existing 500-node / 800-ms limits. A partial pass is discarded.
+              tactical_pass = difficulty == "medium" and level == 3
+              scoped = if tactical_pass, do: medium_extension_choices(candidates, previous_scores), else: candidates
+              search_budget = if tactical_pass, do: %{budget | width: 5}, else: budget
+              {best, results, left, complete, win} = search_roots(game, scoped, level, search_budget, nodes, deadline)
+              attempt = %{depth: level, checked: Enum.count(results, &(&1.searched != nil)), total: length(scoped)}
               if complete do
                 {:cont, {best, level, results, attempt, left, if(win, do: "proven_win", else: "complete")}}
               else
@@ -66,7 +76,8 @@ defmodule GameSimulator.Traversal.Bot do
         end)
         score = if chosen_entry, do: chosen_entry.searched, else: Map.fetch!(static_scores, chosen)
         trace = %{
-          chosen: chosen, score: score, depth: depth, limit_depth: budget.depth,
+          chosen: chosen, score: score, depth: depth, limit_depth: depth_limit,
+          tactical: medium_alerts != [], tactical_alerts: medium_alerts,
           mode: if(depth == 1, do: "preselection", else: "search"),
           stop: stop, interrupted: if(stop == "budget", do: Map.put(last_attempt, :reason, if(remaining <= 0, do: "nodes", else: "time")), else: nil),
           root_legal: length(ranked_options), root_filtered: length(options), root_considered: length(candidates),
@@ -101,6 +112,79 @@ defmodule GameSimulator.Traversal.Bot do
         end
       end)
     {best, Enum.reverse(entries), left, complete, win}
+  end
+
+  # Tactical alarm based on legal opponent moves, rather than distance alone.
+  # Attacks against our Vanguard/Sentinel and an opponent close to a decisive
+  # exit warrant a deeper search; harmless opening moves retain depth two.
+  def tactical_alerts(game) do
+    opponent = 3 - game.turn
+    attacks = Game.actions(%{game | turn: opponent})
+      |> Enum.filter(&(&1.kind == "attack"))
+      |> Enum.map(fn action -> Game.occupant(game, action.row, action.col) end)
+      |> Enum.filter(&(&1 != nil and &1.player == game.turn and &1.strength >= 2))
+      |> Enum.map(& &1.id)
+      |> Enum.uniq()
+
+    imminent_exit = Game.active(game)
+      |> Enum.any?(fn piece ->
+        piece.player == opponent and
+          (piece.type == "sentinel" or game.exited != []) and
+          abs(piece.row - Game.last_row(opponent)) <=
+            (if piece.type == "explorer", do: 3, else: 2)
+      end)
+    if imminent_exit, do: ["exit" | attacks], else: attacks
+  end
+
+  # Only candidate ordering changes here, never the score used by minimax.
+  # Preserve moves that prevent a *real*, legal capture of a valuable piece
+  # even when their positional score is below the regular beam cutoff.
+  defp protect_threatened_pieces(_game, options, ["exit"], _deadline), do: options
+  defp protect_threatened_pieces(game, options, alerts, deadline) do
+    victims = Enum.filter(Game.active(game), &(&1.id in alerts))
+    if victims == [] do
+      options
+    else
+      {head, tail} = Enum.split(options, 48)
+      scored = Enum.map(head, fn {move, adjusted} = entry ->
+        if exhausted?(1, deadline) do
+          {entry, 0}
+        else
+          next = Game.apply_action(game, move)
+          saved = Enum.reduce(victims, 0, fn victim, total ->
+            target = Enum.find(next.pieces, &(&1.id == victim.id))
+            if target.status == "active" and not capturable_next?(next, target) do
+              total + target.strength
+            else
+              total
+            end
+          end)
+          {{move, adjusted}, saved}
+        end
+      end)
+      prioritized = Enum.sort_by(scored, fn {{move, adjusted}, saved} ->
+        {-saved, -adjusted, move.piece, move.row, move.col}
+      end) |> Enum.map(&elem(&1, 0))
+      prioritized ++ tail
+    end
+  end
+
+  defp capturable_next?(game, target) do
+    Game.actions(game)
+    |> Enum.any?(&(&1.kind == "attack" and &1.row == target.row and &1.col == target.col))
+  end
+
+  # The depth-two winner and highest scored alternatives stay in the deeper
+  # set, together with defensive moves promoted by the tactical presort.
+  defp medium_extension_choices(candidates, scored) do
+    scored_first = Enum.sort_by(scored, fn entry ->
+      {-entry.searched, entry.move.piece, entry.move.row, entry.move.col}
+    end) |> Enum.take(4)
+    ids = Enum.map(scored_first, & &1.move)
+    prioritized = Enum.take(candidates, 2) |> Enum.map(&elem(&1, 0))
+    Enum.uniq(prioritized ++ ids)
+    |> Enum.take(6)
+    |> Enum.map(fn move -> Enum.find(candidates, &(elem(&1, 0) == move)) end)
   end
 
   # Only re-evaluate the promising root choices to preserve the response budget.
