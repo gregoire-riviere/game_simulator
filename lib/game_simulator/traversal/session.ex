@@ -29,7 +29,7 @@ defmodule GameSimulator.Traversal.Session do
   def handle_call({:new, board, difficulty, seed}, from, state), do: handle_call({:new, board, difficulty, seed, "classic"}, from, state)
   def handle_call({:new, board, difficulty, seed, variant}, _from, state) do
     if Game.valid_board?(board) and difficulty in ["easy", "medium", "hard"] and Variant.valid?(variant, seed) do
-      next = %{game: Game.new(board, variant, seed), seed: seed, difficulty: difficulty, revision: 0, id: Base.url_encode64(:crypto.strong_rand_bytes(18), padding: false)}
+      next = %{game: Game.new(board, variant, seed), seed: seed, difficulty: difficulty, revision: 0, log: [], id: Base.url_encode64(:crypto.strong_rand_bytes(18), padding: false)}
       {:reply, {:ok, public(next)}, next, 1_800_000}
     else
       {:reply, {:error, :invalid_game}, state, 1_800_000}
@@ -44,7 +44,7 @@ defmodule GameSimulator.Traversal.Session do
         case Game.play(state.game, params["piece"], params["row"], params["col"]) do
           {:error, reason} -> {:reply, {:error, reason}, state, 1_800_000}
           {:ok, game} ->
-            next = %{state | game: game, revision: state.revision + 1}
+            next = record(state, game, Enum.find(Game.legal(state.game, params["piece"]), &(&1.row == params["row"] and &1.col == params["col"])))
             if game.result == nil, do: send(self(), {:bot, next.id, next.revision})
             {:reply, {:ok, public(next)}, next, 1_800_000}
         end
@@ -54,16 +54,27 @@ defmodule GameSimulator.Traversal.Session do
   def handle_info({:bot, id, revision}, %{id: id, revision: revision, game: %{turn: 2, result: nil}} = state) do
     case Bot.choose(state.game, state.difficulty) do
       nil -> {:noreply, state, 1_800_000}
-      move -> {:noreply, %{state | game: Game.apply_action(state.game, move), revision: revision + 1}, 1_800_000}
+      move -> {:noreply, record(state, Game.apply_action(state.game, move), move), 1_800_000}
     end
   end
   def handle_info({:bot, _id, _revision}, state), do: {:noreply, state, 1_800_000}
   def handle_info(:timeout, state), do: {:stop, :normal, state}
 
+  # Keep action provenance before it disappears from the board (captures and exits).
+  defp record(state, game, move) do
+    piece = Enum.find(state.game.pieces, &(&1.id == move.piece))
+    victim = Game.occupant(state.game, move.row, move.col)
+    entry = %{player: piece.player, piece: piece.id, from: [piece.row, piece.col],
+      to: [move.row, move.col], kind: move.kind, special: move.special,
+      cost: move.cost, captured: if(victim, do: victim.id, else: nil),
+      attack: Map.get(move, :attack), defence: Map.get(move, :defence)}
+    %{state | game: game, revision: state.revision + 1, log: state.log ++ [entry]}
+  end
+
   def public(nil), do: %{game: nil}
   def public(state) do
     actions = Game.actions(state.game)
     game = Map.drop(state.game, [:history])
-    %{game: game, seed: state.seed, game_id: state.id, revision: state.revision, difficulty: state.difficulty, legal: if(game.turn == 1, do: actions, else: []), thinking: game.turn == 2 and game.result == nil and actions != [], blocked: game.result == nil and actions == []}
+    %{game: game, seed: state.seed, game_id: state.id, revision: state.revision, difficulty: state.difficulty, log: state.log, legal: if(game.turn == 1, do: actions, else: []), thinking: game.turn == 2 and game.result == nil and actions != [], blocked: game.result == nil and actions == []}
   end
 end
