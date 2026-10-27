@@ -187,7 +187,8 @@ La phase, l'état, la rangée et les colonnes des ponts figurent dans le résum�
 Sur un plateau de taille paire, une rangée centrale occupe nécessairement une des
 deux moitiés : elle est ici légèrement plus proche du camp du joueur 1.
 
-Les bots utilisent les coups légaux du moteur pour leurs recherches. Les champs de
-distance tiennent compte de l'état actuel du pont, estimation susceptible de
-changer pendant la recherche. Les budgets temporels restent bornés, sans garantie
-de niveau équivalent sur le plateau étendu.
+Les bots utilisent les coups légaux du moteur pour leurs recherches. Ils calculent
+les champs de distance pour les deux états du pont et choisissent le champ adapté
+à chaque position simulée. Ces distances restent des estimations : elles ne prennent
+pas en compte les futures ouvertures ou fermetures durant un trajet. Les budgets
+temporels restent bornés, sans garantie de niveau équivalent sur le plateau étendu.

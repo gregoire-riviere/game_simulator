@@ -278,14 +278,31 @@ defmodule GameSimulator.Traversal.Bot do
     end
   end
 
-  # Reverse Dijkstra ignores occupants and estimates the terrain cost to exit.
-  # This estimate uses the current bridge state and is reused throughout search.
+  # Reverse Dijkstra ignores occupants. Keep both bridge states because the
+  # bridge can change while the same distance fields are reused during search.
   def terrain(board, forests \\ [], game \\ nil) do
+    fields = terrain_fields(board, forests, game)
+    if game != nil and Game.bridge?(game) do
+      other = terrain_fields(board, forests, %{game | bridge_open: not game.bridge_open})
+      Map.put(fields, :bridge_fields, %{game.bridge_open => fields, (not game.bridge_open) => other})
+    else
+      fields
+    end
+  end
+
+  def terrain_fields(board, forests, game) do
     Map.new([1, 2], fn player ->
       frontier = for col <- 0..(length(board) - 1), do: {1, if(player == 1, do: 0, else: length(board) - 1), col}
       distances = Map.new(frontier, fn {cost, row, col} -> {{row, col}, cost} end)
       {player, terrain_walk(board, frontier, distances, forests, game)}
     end)
+  end
+
+  def terrain_for(game, terrain, player) do
+    case Map.get(terrain, :bridge_fields) do
+      nil -> Map.fetch!(terrain, player)
+      fields -> fields |> Map.fetch!(game.bridge_open) |> Map.fetch!(player)
+    end
   end
 
   def terrain_walk(_board, [], distances, _forests, _game), do: distances
@@ -317,7 +334,7 @@ defmodule GameSimulator.Traversal.Bot do
       Game.active(game)
       |> Enum.filter(&(&1.player != game.turn and &1.type == "sentinel" and abs(&1.row - Game.last_row(&1.player, game)) <= 6))
       |> Enum.map(fn runner ->
-        route = rush_route(game, runner.id, terrain[runner.player], 0, [])
+        route = rush_route(game, runner.id, terrain, 0, [])
         defenders = Game.active(game) |> Enum.filter(&(&1.player == game.turn))
           |> Enum.sort_by(fn piece -> {-piece.strength, abs(piece.row - runner.row) + abs(piece.col - runner.col), piece.id} end)
           |> Enum.take(2)
@@ -329,23 +346,24 @@ defmodule GameSimulator.Traversal.Bot do
     end
   end
 
-  def rush_route(_game, _id, _distances, 4, route), do: Enum.reverse(route)
-  def rush_route(game, id, distances, turn, route) do
+  def rush_route(_game, _id, _terrain, 4, route), do: Enum.reverse(route)
+  def rush_route(game, id, terrain, turn, route) do
     runner = Enum.find(Game.active(game), &(&1.id == id))
     if runner == nil or game.result != nil do
       Enum.reverse(route)
     else
       route = [{game, turn} | route]
+      distances = terrain_for(game, terrain, runner.player)
       moves = Game.legal(%{game | turn: runner.player}, id)
       # Keep the current lane on equal terrain costs; captures remain legal paths.
       move = Enum.min_by(moves, fn move ->
-        remaining = if move.kind == "exit", do: 0, else: distances[{move.row, move.col}]
+        remaining = if move.kind == "exit", do: 0, else: Map.get(distances, {move.row, move.col}, 1_000)
         {remaining, abs(move.col - runner.col), move.row, move.col}
       end, fn -> nil end)
       if move == nil or move.kind == "exit" do
         Enum.reverse(route)
       else
-        rush_route(Game.apply_action(%{game | turn: runner.player}, move), id, distances, turn + 1, route)
+        rush_route(Game.apply_action(%{game | turn: runner.player}, move), id, terrain, turn + 1, route)
       end
     end
   end
@@ -532,7 +550,8 @@ defmodule GameSimulator.Traversal.Bot do
         enemy.player != piece.player and enemy.type == "cannon" and
           Enum.any?(Game.cannon_actions(game, enemy), &(&1.row == piece.row and &1.col == piece.col))
       end)
-      remaining = terrain |> Map.fetch!(piece.player) |> Map.fetch!({piece.row, piece.col})
+      distances = terrain_for(game, terrain, piece.player)
+      remaining = Map.get(distances, {piece.row, piece.col}, length(game.board) * 10)
       travel = round(remaining / piece.movement * 45)
       sentinel = if piece.type == "sentinel" and game.exited == [] do
         urgency = cond do

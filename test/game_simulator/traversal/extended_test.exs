@@ -98,6 +98,25 @@ defmodule GameSimulator.Traversal.ExtendedTest do
     refute left.bridge_open
   end
 
+  test "bot evaluates a bridge that opens after its distance fields were built" do
+    explorer = piece("explorer", 1, 7, 4, "e")
+    enemy = piece("sentinel", 2, 2, 8, "s")
+    closed = %{Game.new(board(12), "extended+bridge") | pieces: [explorer, enemy], moves: 3, turn: 2, bridge_open: false}
+    fields = Bot.terrain(closed.board, [], closed)
+    refute Map.has_key?(Bot.terrain_for(closed, fields, 1), {6, 4})
+
+    opened = %{closed | moves: 4, turn: 1, bridge_open: true}
+    assert Map.has_key?(Bot.terrain_for(opened, fields, 1), {6, 4})
+    {:ok, on_bridge} = Game.play(opened, "e", 6, 4)
+    assert is_integer(Bot.evaluate(on_bridge, 2, fields))
+
+    for difficulty <- ["medium", "hard"] do
+      {move, trace} = Bot.choose_with_trace(closed, difficulty)
+      assert move in Game.actions(closed)
+      assert trace.chosen == move
+    end
+  end
+
   test "bots choose legal actions in combined variant" do
     cannon = piece("cannon", 1, 7, 6, "c")
     enemy = piece("explorer", 2, 4, 6, "t")
