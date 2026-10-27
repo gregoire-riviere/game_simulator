@@ -24,6 +24,27 @@ defmodule GameSimulatorWeb.EndpointTest do
     {:ok, data_directory: data_directory}
   end
 
+  test "rejects configuration probes and unknown static paths with a clean 404" do
+    for path <- ["/.env", "/.env.local", "/.git/config", "/missing-static.txt", "/unknown/path"] do
+      response = Endpoint.call(conn(:get, path), Endpoint.init([]))
+      assert response.state == :sent
+      assert response.status == 404
+      assert response.resp_body == "Not Found"
+      assert get_resp_header(response, "content-type") == ["text/plain; charset=utf-8"]
+      assert get_resp_header(response, "x-content-type-options") == ["nosniff"]
+      assert get_resp_header(response, "x-frame-options") == ["DENY"]
+      assert get_resp_header(response, "referrer-policy") == ["strict-origin-when-cross-origin"]
+    end
+  end
+
+  test "unmatched API paths remain JSON 404 with no-store" do
+    response = Endpoint.call(conn(:get, "/api/nonexistent"), Endpoint.init([]))
+    assert response.status == 404
+    assert Poison.decode!(response.resp_body) == %{"error" => "not_found"}
+    assert get_resp_header(response, "cache-control") == ["no-store"]
+    assert get_resp_header(response, "x-content-type-options") == ["nosniff"]
+  end
+
   test "authenticates a configured user" do
     user = "test-user-#{System.system_time(:nanosecond)}"
     assert :ok = Users.add(user, "a-long-test-password", ["poker"])

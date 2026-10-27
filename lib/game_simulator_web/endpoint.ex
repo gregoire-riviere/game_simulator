@@ -11,6 +11,7 @@ defmodule GameSimulatorWeb.Endpoint do
   alias GameSimulatorWeb.{Auth, Users}
 
   plug(Plug.Logger)
+  plug(:security_headers)
 
   plug(Plug.Parsers,
     parsers: [:urlencoded, :multipart, :json],
@@ -493,11 +494,33 @@ defmodule GameSimulatorWeb.Endpoint do
   end
 
   match _ do
-    HTMLHandler.Plug.OutputStatic.call(conn,
-      output: static_directory(),
-      routes: %{"/" => "index.html"},
-      token_api: false
-    )
+    # OutputStatic deliberately leaves missing resources unmatched; Cowboy
+    # requires a response, otherwise every bot probing /.env causes a crash
+    # log (Plug.Conn.NotSentError).
+    if Enum.any?(conn.path_info, &String.starts_with?(&1, ".")) do
+      not_found(conn)
+    else
+      conn = HTMLHandler.Plug.OutputStatic.call(conn,
+        output: static_directory(),
+        routes: %{"/" => "index.html"},
+        token_api: false
+      )
+
+      if conn.state == :unset, do: not_found(conn), else: conn
+    end
+  end
+
+  defp not_found(conn) do
+    conn
+    |> Plug.Conn.put_resp_content_type("text/plain")
+    |> Plug.Conn.send_resp(404, "Not Found")
+  end
+
+  def security_headers(conn, _opts) do
+    conn
+    |> Plug.Conn.put_resp_header("x-content-type-options", "nosniff")
+    |> Plug.Conn.put_resp_header("x-frame-options", "DENY")
+    |> Plug.Conn.put_resp_header("referrer-policy", "strict-origin-when-cross-origin")
   end
 
   def static_directory do
@@ -514,6 +537,7 @@ defmodule GameSimulatorWeb.Endpoint do
   def send_json(conn, status, body) do
     conn
     |> Plug.Conn.put_resp_content_type("application/json")
+    |> Plug.Conn.put_resp_header("cache-control", "no-store")
     |> Plug.Conn.send_resp(status, Poison.encode!(body))
   end
 
