@@ -141,7 +141,7 @@ defmodule GameSimulator.Traversal.Bot do
   defp protect_threatened_pieces(_game, options, ["exit"], _deadline), do: options
   defp protect_threatened_pieces(game, options, alerts, deadline) do
     victims = Enum.filter(Game.active(game), &(&1.id in alerts))
-    if victims == [] do
+    if victims == [] or match?([{_, 1_000_000} | _], options) do
       options
     else
       {head, tail} = Enum.split(options, 28)

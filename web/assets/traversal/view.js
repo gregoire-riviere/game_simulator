@@ -121,8 +121,8 @@ export function mountTraversal(page, api) {
   controls.target.set(0, 1, 0);
   const render = () => { if (!disposed) renderer.render(scene, camera); };
   controls.addEventListener('change', render);
-  scene.add(new THREE.HemisphereLight(0xe6f5ff, 0x475569, 0.9));
-  const light = new THREE.DirectionalLight(0xffffff, 1.2);
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x756b5d, 1.3));
+  const light = new THREE.DirectionalLight(0xffffff, 1.6);
   light.position.set(-5, 12, 8);
   scene.add(light);
   let terrain = new THREE.Group();
@@ -156,6 +156,7 @@ export function mountTraversal(page, api) {
 
   const forestAt = (row, col) => (state?.game?.forests || []).some(cell => cell.row === row && cell.col === col);
   const tileTop = height => 0.24 + height * 0.28;
+  const heightColors = [0xf6ecd2, 0xe4cf9e, 0xd2b47e, 0xbd9861, 0xa07a49, 0x805b34];
   const riverAt = (row, size) => Boolean(state?.game?.variant.includes('bridge')) && row === size / 2;
   const bridgeAt = (row, col, size) => riverAt(row, size) && (col === size / 2 + 1 || (col === size / 2 - 2 && state.game.bridge_open));
   function trees(x, z, height, center) {
@@ -185,7 +186,7 @@ export function mountTraversal(page, api) {
         const thickness = tileTop(height);
         const river = riverAt(z, size);
         const bridge = bridgeAt(z, x, size);
-        const color = river ? (bridge ? 0x987a52 : 0x2f91ac) : new THREE.Color().setHSL(0.105, 0.30, 0.75 - height * 0.055 + (x + z) % 2 * 0.01);
+        const color = river ? (bridge ? 0x987a52 : 0x2f91ac) : heightColors[height];
         const tileHeight = river && !bridge ? 0.12 : thickness;
         const tile = new THREE.Mesh(new THREE.BoxGeometry(0.96, tileHeight, 0.96), new THREE.MeshStandardMaterial({ color, roughness: 0.85 }));
         tile.position.set(x - center, tileHeight / 2, z - center);

@@ -117,6 +117,27 @@ defmodule GameSimulator.Traversal.ExtendedTest do
     end
   end
 
+  test "an immediate sentinel exit takes priority over a tactical capture" do
+    heights = ["000001100011", "111111111112", "222211112222", "333322222333",
+      "444332233344", "544333334445", "544433333445", "443332233444",
+      "333222223333", "222211112222", "211111111111", "110001100000"]
+      |> Enum.map(fn row -> row |> String.graphemes() |> Enum.map(&String.to_integer/1) end)
+    moves = [{"1-3", 9, 5}, {"2-0", 1, 8}, {"1-3", 8, 5}, {"2-0", 3, 8},
+      {"1-3", 8, 7}, {"2-0", 4, 7}, {"1-3", 8, 8}, {"2-0", 7, 7},
+      {"1-3", 8, 10}, {"2-0", 7, 5}, {"1-3", 8, 8}, {"2-0", 9, 5}, {"1-0", 10, 3}]
+    state = Enum.reduce(moves, Game.new(heights, "extended+forests+bridge", "1115841654"), fn {id, row, col}, game ->
+      {:ok, next} = Game.play(game, id, row, col)
+      next
+    end)
+    assert Enum.any?(Game.legal(state, "2-0"), &(&1.kind == "attack"))
+    for difficulty <- ["easy", "medium", "hard"] do
+      {move, trace} = Bot.choose_with_trace(state, difficulty)
+      assert move.kind == "exit"
+      assert Game.apply_action(state, move).result.winner == 2
+      assert trace.chosen == move
+    end
+  end
+
   test "bots choose legal actions in combined variant" do
     cannon = piece("cannon", 1, 7, 6, "c")
     enemy = piece("explorer", 2, 4, 6, "t")
