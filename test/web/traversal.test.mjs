@@ -95,3 +95,22 @@ test('official silhouettes have pentagonal/quadrilateral/triangular bases and 1/
     assert.ok([...edges.values()].every(count => count === 2), `${type} must be a closed solid`);
   }
 });
+
+test('extended boards remain symmetric and traversable across seeds', () => {
+  for (let seed = 0; seed < 100; seed += 1) {
+    const board = generateBoard(String(seed), 12);
+    assert.equal(board.length, 12);
+    for (let r = 0; r < 12; r += 1) for (let c = 0; c < 12; c += 1) {
+      assert.equal(board[r][c], board[11 - r][11 - c]);
+      for (let dr = -1; dr <= 1; dr += 1) for (let dc = -1; dc <= 1; dc += 1) {
+        if (board[r + dr]?.[c + dc] !== undefined) assert.ok(Math.abs(board[r][c] - board[r + dr][c + dc]) <= 2);
+      }
+    }
+  }
+});
+
+test('cannon has its own closed geometry', () => {
+  const shape = pieceShape('cannon');
+  assert.equal(shape.vertices.length, 8);
+  assert.equal(shape.triangles.length, 12);
+});

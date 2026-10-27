@@ -4,6 +4,9 @@ function solid(vertices, triangles) {
 }
 
 export function pieceShape(type) {
+  if (type === 'cannon') {
+    return solid([[-0.25, 0, -0.2], [0.25, 0, -0.2], [0.25, 0, 0.2], [-0.25, 0, 0.2], [-0.18, 0.3, -0.16], [0.18, 0.3, -0.16], [0.18, 0.3, 0.16], [-0.18, 0.3, 0.16]], [[0, 2, 1], [0, 3, 2], [4, 5, 6], [4, 6, 7], [0, 1, 5], [0, 5, 4], [1, 2, 6], [1, 6, 5], [2, 3, 7], [2, 7, 6], [3, 0, 4], [3, 4, 7]]);
+  }
   if (type === 'explorer') {
     const vertices = Array.from({ length: 5 }, (_, i) => [Math.cos(i * Math.PI * 2 / 5) * 0.27, 0, Math.sin(i * Math.PI * 2 / 5) * 0.27]);
     vertices.push([0, 0.65, 0]);

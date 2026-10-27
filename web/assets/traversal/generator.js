@@ -1,6 +1,6 @@
 export const BOARD_SIZE = 10;
 
-export function generateBoard(seed) {
+export function generateBoard(seed, boardSize = BOARD_SIZE) {
   // FNV-1a puis un générateur entier : même graine, même relief sur chaque navigateur.
   let state = 2166136261;
   for (const character of String(seed)) {
@@ -12,7 +12,7 @@ export function generateBoard(seed) {
   };
   // Deux grilles interpolées : grandes zones continues et détails plus locaux.
   const layer = spacing => {
-    const size = Math.floor((BOARD_SIZE - 1) / spacing) + 2;
+    const size = Math.floor((boardSize - 1) / spacing) + 2;
     const grid = Array.from({ length: size }, () => Array.from({ length: size }, random));
     const smooth = value => value * value * (3 - 2 * value);
     const mix = (a, b, amount) => a + (b - a) * amount;
@@ -27,8 +27,8 @@ export function generateBoard(seed) {
   const fine = layer(1.5 + random() * 1.5);
   const detail = 0.15 + random() * 0.35;
   const sample = (x, z) => broad(x, z) * (1 - detail) + fine(x, z) * detail;
-  const field = Array.from({ length: BOARD_SIZE }, (_, z) =>
-    Array.from({ length: BOARD_SIZE }, (_, x) => (sample(x, z) + sample(9 - x, 9 - z)) / 2));
+  const field = Array.from({ length: boardSize }, (_, z) =>
+    Array.from({ length: boardSize }, (_, x) => (sample(x, z) + sample(boardSize - 1 - x, boardSize - 1 - z)) / 2));
   const minimum = Math.min(...field.flat()), maximum = Math.max(...field.flat());
   // L'amplitude varie aussi : ne pas forcer chaque carte à occuper les six niveaux.
   const amplitude = 2 + random() * 3;

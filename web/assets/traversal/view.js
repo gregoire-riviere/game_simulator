@@ -12,7 +12,8 @@ export function mountTraversal(page, api) {
   const reset = page.querySelector('#traversal-reset');
   const top = page.querySelector('#traversal-top');
   const difficulty = page.querySelector('#traversal-difficulty');
-  const variant = page.querySelector('#traversal-variant');
+  const options = ['extended', 'forests', 'bridge'].map(name => [name, page.querySelector('#traversal-' + name)]);
+  const variantValue = () => options.filter(([, input]) => input.checked).map(([name]) => name).join('+') || 'classic';
   const selection = page.querySelector('#traversal-selection');
   const pieceOptions = page.querySelector('#traversal-pieces');
   const actionOptions = page.querySelector('#traversal-actions');
@@ -20,7 +21,7 @@ export function mountTraversal(page, api) {
   const exportStatus = page.querySelector('#traversal-export-status');
   const exportText = page.querySelector('#traversal-export-text');
   const exportDetails = page.querySelector('#traversal-export-details');
-  const coord = ([r, c]) => r < 0 || r > 9 ? 'EXIT' : String.fromCharCode(65 + c) + (r + 1);
+  const coord = ([r, c]) => r < 0 || r >= (state?.game?.board?.length || 10) ? 'EXIT' : String.fromCharCode(65 + c) + (r + 1);
   // Every AI line comes from the search that made that historical move.
   // A score from an aborted deeper iteration is NEVER represented as validated.
   const moveNotation = m => m.piece + '>' + coord([m.row, m.col]) +
@@ -59,9 +60,10 @@ export function mountTraversal(page, api) {
     if (!state?.game) return 'Aucune partie en cours.';
     const game = state.game;
     const lines = [
-      'TRAVERSAL replay v2',
+      'TRAVERSAL replay v3',
       'Bot=' + state.difficulty + ' variant=' + game.variant + ' seed=' + JSON.stringify(state.seed),
       'Board=' + game.board.map(row => row.join('')).join('/'),
+      'Bridge=' + (game.variant.includes('bridge') ? ('open:' + game.bridge_open + ',phase:' + (game.moves % 4)) : 'none'),
       'Forests=' + (game.forests || []).map(p => coord([p.row, p.col])).sort().join(','),
       'Pieces=' + game.pieces.map(p => p.id + ':' + p.type[0].toUpperCase() + ':' + p.status[0] + ':' + coord([p.row, p.col])).join(','),
       'Moves=' + game.moves + ' turn=' + game.turn + ' scores=' + game.scores.join('-') +
@@ -74,6 +76,7 @@ export function mountTraversal(page, api) {
         ' ' + coord(m.from) + '>' + coord(m.to) + ' ' +
         ({move:'M',attack:'A',exit:'E'}[m.kind] || m.kind) +
         (m.special ? '*' : '') + ' c' + m.cost +
+        (game.variant.includes('bridge') ? ' bridge=' + m.bridge_before + '>' + m.bridge_after : '') +
         (m.captured ? ' x' + m.captured : '') +
         (m.attack == null ? '' : ' ' + m.attack + '/' + m.defence)
       );
@@ -105,7 +108,7 @@ export function mountTraversal(page, api) {
     return () => {};
   }
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-  renderer.setClearColor(0x101a2a);
+  renderer.setClearColor(0xd8cbb6);
   renderer.domElement.setAttribute('aria-label', 'Plateau de relief 3D : 10 lignes et 10 colonnes');
   host.replaceChildren(renderer.domElement);
   const scene = new THREE.Scene();
@@ -142,7 +145,7 @@ export function mountTraversal(page, api) {
     const context = canvas.getContext('2d');
     context.font = 'bold 38px sans-serif';
     context.textAlign = 'center';
-    context.fillStyle = '#cbd5e1';
+    context.fillStyle = '#51483d';
     context.fillText(text, 32, 47);
     const texture = new THREE.CanvasTexture(canvas);
     const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, depthTest: false }));
@@ -152,13 +155,13 @@ export function mountTraversal(page, api) {
   }
 
   const forestAt = (row, col) => (state?.game?.forests || []).some(cell => cell.row === row && cell.col === col);
-  function trees(x, z, height) {
+  function trees(x, z, height, center) {
     // Corner trees leave the central piece and destination ring visible.
     for (const [dx, dz] of [[-0.34, -0.34], [0.34, 0.34]]) {
       const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.035, 0.14, 5), new THREE.MeshStandardMaterial({ color: 0x755438 }));
-      trunk.position.set(x - 4.5 + dx, height + 0.07, z - 4.5 + dz);
+      trunk.position.set(x - center + dx, height + 0.07, z - center + dz);
       const crown = new THREE.Mesh(new THREE.ConeGeometry(0.105, 0.26, 5), new THREE.MeshStandardMaterial({ color: 0x47a16a, roughness: 0.9 }));
-      crown.position.set(x - 4.5 + dx, height + 0.23, z - 4.5 + dz);
+      crown.position.set(x - center + dx, height + 0.23, z - center + dz);
       terrain.add(trunk, crown);
     }
     // These decorative meshes never enter the raycast targets.
@@ -171,17 +174,19 @@ export function mountTraversal(page, api) {
     scene.add(terrain);
     const heights = state?.game?.board || generateBoard(seed.value);
     targets.length = 0;
-    for (let z = 0; z < 10; z += 1) {
-      for (let x = 0; x < 10; x += 1) {
+    const size = heights.length, center = (size - 1) / 2;
+    renderer.domElement.setAttribute('aria-label', `Plateau de relief 3D : ${size} lignes et ${size} colonnes`);
+    for (let z = 0; z < size; z += 1) {
+      for (let x = 0; x < size; x += 1) {
         const height = heights[z][x];
-        const thickness = 0.24 + height * 0.35;
-        const color = new THREE.Color().setHSL(0.49 - height * 0.035, 0.22, 0.24 + height * 0.065 + (x + z) % 2 * 0.03);
+        const thickness = 0.24 + height * 0.16;
+        const color = new THREE.Color().setHSL(0.105, 0.30, 0.72 - height * 0.025 + (x + z) % 2 * 0.015);
         const tile = new THREE.Mesh(new THREE.BoxGeometry(0.96, thickness, 0.96), new THREE.MeshStandardMaterial({ color, roughness: 0.85 }));
-        tile.position.set(x - 4.5, thickness / 2, z - 4.5);
+        tile.position.set(x - center, thickness / 2, z - center);
         tile.userData = { row: z, col: x };
         targets.push(tile);
         terrain.add(tile);
-        if (forestAt(z, x)) trees(x, z, thickness);
+        if (forestAt(z, x)) trees(x, z, thickness, center);
         const playerPiece = state?.game?.pieces.find(p => p.status === 'active' && p.row === z && p.col === x);
         if (playerPiece) {
           const shape = pieceShape(playerPiece.type);
@@ -189,29 +194,58 @@ export function mountTraversal(page, api) {
           // Flat faces keep the one/two/three upper vertices easy to read.
           geometry.setAttribute('position', new THREE.Float32BufferAttribute(shape.triangles.flatMap(face => face.flatMap(i => shape.vertices[i])), 3));
           geometry.computeVertexNormals();
-          const piece = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color: playerPiece.id === selected ? 0xffe166 : playerPiece.player === 1 ? 0x8cbdff : 0xf3bb72, roughness: 0.35, metalness: 0.15 }));
+          const piece = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color: playerPiece.id === selected ? 0xffe166 : playerPiece.player === 1 ? 0x246cb2 : 0xe88320, roughness: 0.35, metalness: 0.15 }));
           if (playerPiece.type === 'vanguard') piece.rotation.y = Math.PI / 4;
-          piece.position.set(x - 4.5, thickness + 0.02, z - 4.5);
+          const base = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.31, 0.08, 16), piece.material.clone());
+          base.position.y = 0.04;
+          base.userData = { row: z, col: x, piece: playerPiece.id };
+          piece.add(base);
+          if (playerPiece.type === 'cannon') {
+            const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.095, 0.12, 0.42, 8), piece.material.clone());
+            barrel.rotation.x = Math.PI / 2;
+            barrel.position.set(0, 0.27, playerPiece.player === 1 ? -0.23 : 0.23);
+            barrel.userData = { row: z, col: x, piece: playerPiece.id };
+            piece.add(barrel);
+          }
+          piece.position.set(x - center, thickness + 0.02, z - center);
           piece.userData = { row: z, col: x, piece: playerPiece.id };
           targets.push(piece);
           terrain.add(piece);
         }
       }
-      label(String(z + 1), -5.5, z - 4.5);
-      label(String.fromCharCode(65 + z), z - 4.5, 5.5);
+      label(String(z + 1), -center - 1, z - center);
+      label(String.fromCharCode(65 + z), z - center, center + 1);
     }
     for (const move of (state?.legal || []).filter(m => m.piece === selected)) {
-      const y = move.kind === 'exit' ? 0.25 : 0.28 + heights[move.row][move.col] * 0.35;
+      const y = move.kind === 'exit' ? 0.25 : 0.28 + heights[move.row][move.col] * 0.16;
       const color = move.kind === 'attack' ? 0xfb7185 : move.kind === 'exit' ? 0x86efac : 0x7dd3fc;
       const marker = new THREE.Mesh(new THREE.RingGeometry(0.31, 0.43, move.kind === 'attack' ? 4 : 32), new THREE.MeshBasicMaterial({ color, side: THREE.DoubleSide }));
       marker.rotation.x = -Math.PI / 2;
-      marker.position.set(move.col - 4.5, y, move.row - 4.5);
+      marker.position.set(move.col - center, y, move.row - center);
       marker.renderOrder = 1;
       marker.userData = { row: move.row, col: move.col };
       targets.push(marker);
       terrain.add(marker);
     }
+    if (state?.game?.variant.includes('bridge')) {
+      // The river follows the boundary between the two central rows.
+      const river = new THREE.Mesh(new THREE.BoxGeometry(size, 0.06, 0.09), new THREE.MeshBasicMaterial({color: 0x3584a4}));
+      river.position.set(0, 1.08, 0);
+      terrain.add(river);
+      for (const col of [1, size / 2, size - 2]) {
+        const active = col !== size / 2 || state.game.bridge_open;
+        const crossing = new THREE.Mesh(new THREE.BoxGeometry(0.65, 0.08, 0.16), new THREE.MeshBasicMaterial({color: active ? 0xf3d17b : 0x8d4940}));
+        crossing.position.set(col - center, 1.13, 0);
+        terrain.add(crossing);
+      }
+    }
     updateStatus();
+    const header = page.querySelector('#traversal-head');
+    const headerRow = document.createElement('tr');
+    for (const name of ['Ligne', ...Array.from({length: size}, (_, i) => String.fromCharCode(65 + i))]) {
+      const th = document.createElement('th'); th.scope = 'col'; th.textContent = name; headerRow.append(th);
+    }
+    header.replaceChildren(headerRow);
     // La table permet de vérifier les hauteurs exactes du rendu.
     const body = page.querySelector('#traversal-heights');
     body.replaceChildren();
@@ -233,7 +267,7 @@ export function mountTraversal(page, api) {
   }
 
   function resetCamera() {
-    camera.position.set(11, 13, 15);
+    camera.position.set(13, 16, 19);
     controls.target.set(0, 1, 0);
     controls.update();
     render();
@@ -243,8 +277,12 @@ export function mountTraversal(page, api) {
     const result = game?.result;
     const reasonNames = { first_sentinel: 'premier Sentinel sorti', two_exits: 'deux pièces sorties', no_active_pieces: 'un camp sans pièce active', move_limit_score: 'limite de 200 coups, score', move_limit_advancement: 'limite de 200 coups, progression puis force', threefold_repetition: 'répétition de séquence trois fois' };
     const difficulties = { easy: 'facile', medium: 'moyen', hard: 'difficile' };
+    const phase = game?.moves % 4;
+    const bridgeStatus = game?.variant.includes('bridge') ?
+      (game.bridge_open && phase >= 2 ? 'pont ouvert : fermeture dès libération' :
+        `pont ${game.bridge_open ? 'ouvert' : 'fermé'} · changement dans ${phase < 2 ? 2 - phase : 4 - phase} coup(s)`) : '';
     const outcome = result ? `${result.winner === 0 ? 'Match nul' : result.winner === 1 ? 'Vous avez gagné' : 'Le bot a gagné'} : ${reasonNames[result.reason]}.` : state?.blocked ? 'Aucun coup légal : partie bloquée. Vous pouvez lancer une nouvelle partie.' : busy || state?.thinking ? 'Le bot réfléchit…' : 'À vous de jouer — sélectionnez une pièce bleue.';
-    status.textContent = errorMessage + (game ? `${outcome} Score vous ${game.scores[0]} / bot ${game.scores[1]} · coup ${game.moves}/200 · bot ${difficulties[state.difficulty]} · ${game.variant === "forests" ? "Forêts" : "Classique"}.` : 'Choisissez la difficulté et la variante, puis démarrez une nouvelle partie.');
+    status.textContent = errorMessage + (game ? `${outcome} Score vous ${game.scores[0]} / bot ${game.scores[1]} · coup ${game.moves}/200 · bot ${difficulties[state.difficulty]} · ${game.variant}${bridgeStatus ? ` · ${bridgeStatus}` : ''}.` : 'Choisissez la difficulté et la variante, puis démarrez une nouvelle partie.');
     const piece = game?.pieces.find(p => p.id === selected);
     selection.textContent = piece ? `${piece.type} · ${String.fromCharCode(65 + piece.col)}${piece.row + 1} · ${piece.movement} PM · force ${piece.strength}.` : '';
     pieceOptions.replaceChildren();
@@ -284,7 +322,7 @@ export function mountTraversal(page, api) {
       state = next;
       errorMessage = '';
       if (typeof state.seed === 'string') seed.value = state.seed;
-      if (state.game) { variant.value = state.game.variant || 'classic'; difficulty.value = state.difficulty; }
+      if (state.game) { options.forEach(([name, input]) => { input.checked = state.game.variant.split('+').includes(name); }); difficulty.value = state.difficulty; }
       selected = null;
       rebuild();
       if (state.thinking) poll = setTimeout(refresh, 250);
@@ -318,7 +356,7 @@ export function mountTraversal(page, api) {
     errorMessage = '';
     busy = true; updateStatus();
     try {
-      const next = await api('/api/traversal', { method: 'POST', signal: abort.signal, body: JSON.stringify({ board: generateBoard(seed.value), difficulty: difficulty.value, seed: seed.value, variant: variant.value }) });
+      const next = await api('/api/traversal', { method: 'POST', signal: abort.signal, body: JSON.stringify({ board: generateBoard(seed.value, options[0][1].checked ? 12 : 10), difficulty: difficulty.value, seed: seed.value, variant: variantValue() }) });
       if (!disposed) { state = next; selected = null; }
     } catch (error) {
       if (!disposed) errorMessage = 'Impossible de créer la partie. Vérifiez votre connexion. ';

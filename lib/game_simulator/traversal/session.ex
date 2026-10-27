@@ -28,7 +28,7 @@ defmodule GameSimulator.Traversal.Session do
   def handle_call({:new, board, difficulty}, from, state), do: handle_call({:new, board, difficulty, nil}, from, state)
   def handle_call({:new, board, difficulty, seed}, from, state), do: handle_call({:new, board, difficulty, seed, "classic"}, from, state)
   def handle_call({:new, board, difficulty, seed, variant}, _from, state) do
-    if Game.valid_board?(board) and difficulty in ["easy", "medium", "hard"] and Variant.valid?(variant, seed) do
+    if Game.valid_board?(board) and difficulty in ["easy", "medium", "hard"] and Variant.valid?(variant, seed) and (length(board) == if("extended" in String.split(variant, "+"), do: 12, else: 10)) do
       next = %{game: Game.new(board, variant, seed), seed: seed, difficulty: difficulty, revision: 0, log: [], id: Base.url_encode64(:crypto.strong_rand_bytes(18), padding: false)}
       {:reply, {:ok, public(next)}, next, 1_800_000}
     else
@@ -69,7 +69,7 @@ defmodule GameSimulator.Traversal.Session do
     entry = %{player: piece.player, piece: piece.id, from: [piece.row, piece.col],
       to: [move.row, move.col], kind: move.kind, special: move.special,
       cost: move.cost, captured: if(victim, do: victim.id, else: nil),
-      attack: Map.get(move, :attack), defence: Map.get(move, :defence)}
+      attack: Map.get(move, :attack), defence: Map.get(move, :defence), bridge_before: Map.get(state.game, :bridge_open), bridge_after: Map.get(game, :bridge_open)}
     entry = if analysis, do: Map.put(entry, :analysis, analysis), else: entry
     %{state | game: game, revision: state.revision + 1, log: state.log ++ [entry]}
   end

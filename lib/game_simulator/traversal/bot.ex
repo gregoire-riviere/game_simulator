@@ -13,7 +13,7 @@ defmodule GameSimulator.Traversal.Bot do
   def choose_with_trace(game, difficulty) do
     started = System.monotonic_time(:millisecond)
     budget = limits(difficulty)
-    fields = terrain(game.board, Map.get(game, :forests, []))
+    fields = terrain(game.board, Map.get(game, :forests, []), game)
     fields = if difficulty == "easy", do: fields, else: Map.put(fields, :interceptions, interceptions(game, fields))
     fields = Map.put(fields, :tactical, difficulty == "hard")
     budget = Map.put(budget, :terrain, fields)
@@ -129,7 +129,7 @@ defmodule GameSimulator.Traversal.Bot do
     imminent_exit = Game.active(game)
       |> Enum.any?(fn piece ->
         piece.player == opponent and game.exited != [] and
-          abs(piece.row - Game.last_row(opponent)) <=
+          abs(piece.row - Game.last_row(opponent, game)) <=
             (if piece.type == "explorer", do: 3, else: 2)
       end)
     if imminent_exit, do: ["exit" | attacks], else: attacks
@@ -228,7 +228,7 @@ defmodule GameSimulator.Traversal.Bot do
     end)
     progress = Enum.reduce(Game.active(game), 0, fn p, sum ->
       sign = if p.player == player, do: 1, else: -1
-      advance = 9 - abs(p.row - Game.last_row(p.player))
+      advance = length(game.board) - 1 - abs(p.row - Game.last_row(p.player, game))
       sum + sign * advance * (12 + p.strength * 2)
     end)
     [a, b] = game.scores
@@ -241,7 +241,7 @@ defmodule GameSimulator.Traversal.Bot do
 
   def exhausted?(nodes, deadline), do: nodes <= 0 or System.monotonic_time(:millisecond) >= deadline
 
-  def ranked(game, player), do: ranked(game, player, terrain(game.board, Map.get(game, :forests, [])))
+  def ranked(game, player), do: ranked(game, player, terrain(game.board, Map.get(game, :forests, []), game))
   def ranked(game, player, terrain) do
     Game.actions(game)
     # An exited piece is inactive: its exit column has no strategic consequence.
@@ -279,23 +279,23 @@ defmodule GameSimulator.Traversal.Bot do
   end
 
   # Reverse Dijkstra ignores occupants and estimates the terrain cost to exit.
-  # This fixed 100-cell field is computed once per side, then reused throughout search.
-  def terrain(board, forests \\ []) do
+  # This estimate uses the current bridge state and is reused throughout search.
+  def terrain(board, forests \\ [], game \\ nil) do
     Map.new([1, 2], fn player ->
-      frontier = for col <- 0..9, do: {1, Game.last_row(player), col}
+      frontier = for col <- 0..(length(board) - 1), do: {1, if(player == 1, do: 0, else: length(board) - 1), col}
       distances = Map.new(frontier, fn {cost, row, col} -> {{row, col}, cost} end)
-      {player, terrain_walk(board, frontier, distances, forests)}
+      {player, terrain_walk(board, frontier, distances, forests, game)}
     end)
   end
 
-  def terrain_walk(_board, [], distances, _forests), do: distances
-  def terrain_walk(board, frontier, distances, forests) do
+  def terrain_walk(_board, [], distances, _forests, _game), do: distances
+  def terrain_walk(board, frontier, distances, forests, game) do
     [{cost, row, col} | rest] = Enum.sort(frontier)
     if cost > Map.fetch!(distances, {row, col}) do
-      terrain_walk(board, rest, distances, forests)
+      terrain_walk(board, rest, distances, forests, game)
     else
       {frontier, distances} = Enum.reduce(Game.neighbours(row, col), {rest, distances}, fn {r, c}, {queue, known} ->
-        if Game.inside?(r, c) do
+        if Game.inside?(r, c, length(board)) and (game == nil or Game.crossing?(game, row, col, r, c)) do
           next = cost + 1 + abs(Game.height(board, row, col) - Game.height(board, r, c)) +
             if(Enum.any?(forests, &(&1.row == row and &1.col == col)), do: 2, else: 0)
           if next < Map.get(known, {r, c}, 1_000), do: {[{next, r, c} | queue], Map.put(known, {r, c}, next)}, else: {queue, known}
@@ -303,7 +303,7 @@ defmodule GameSimulator.Traversal.Bot do
           {queue, known}
         end
       end)
-      terrain_walk(board, frontier, distances, forests)
+      terrain_walk(board, frontier, distances, forests, game)
     end
   end
 
@@ -315,7 +315,7 @@ defmodule GameSimulator.Traversal.Bot do
       []
     else
       Game.active(game)
-      |> Enum.filter(&(&1.player != game.turn and &1.type == "sentinel" and abs(&1.row - Game.last_row(&1.player)) <= 6))
+      |> Enum.filter(&(&1.player != game.turn and &1.type == "sentinel" and abs(&1.row - Game.last_row(&1.player, game)) <= 6))
       |> Enum.map(fn runner ->
         route = rush_route(game, runner.id, terrain[runner.player], 0, [])
         defenders = Game.active(game) |> Enum.filter(&(&1.player == game.turn))
@@ -353,7 +353,7 @@ defmodule GameSimulator.Traversal.Bot do
   def capture_distances(game, defender_id, runner_id) do
     defender = Enum.find(Game.active(game), &(&1.id == defender_id))
     runner = Enum.find(Game.active(game), &(&1.id == runner_id))
-    {edges, captures} = Enum.reduce(for(r <- 0..9, c <- 0..9, do: {r, c}), {%{}, %{}}, fn {r, c} = origin, {edges, captures} ->
+    {edges, captures} = Enum.reduce(for(r <- 0..(length(game.board) - 1), c <- 0..(length(game.board) - 1), do: {r, c}), {%{}, %{}}, fn {r, c} = origin, {edges, captures} ->
       occupied = Game.occupant(game, r, c)
       if defender == nil or runner == nil or (occupied != nil and occupied.id != defender_id) do
         {edges, captures}
@@ -450,7 +450,7 @@ defmodule GameSimulator.Traversal.Bot do
     game
     |> Game.active()
     |> Enum.reduce(0, fn runner, sum ->
-      steps = abs(runner.row - Game.last_row(runner.player))
+      steps = abs(runner.row - Game.last_row(runner.player, game))
       # Four ranks is sufficient to include a five-PM Explorer's final sprint;
       # the authoritative exit test below handles relief, forests and blockers.
       if steps > 4 or runner.player == player do
@@ -499,7 +499,7 @@ defmodule GameSimulator.Traversal.Bot do
     |> Enum.any?(fn defender ->
       distance = abs(defender.row - runner.row) + abs(defender.col - runner.col)
       if distance > defender.movement + 1 and
-        abs(defender.row - Game.last_row(defender.player)) > defender.movement do
+        abs(defender.row - Game.last_row(defender.player, game)) > defender.movement do
         false
       else
         Game.legal(game, defender.id)
@@ -515,7 +515,7 @@ defmodule GameSimulator.Traversal.Bot do
   end
 
   # Terminal outcomes dominate every positional term, including a first Sentinel exit.
-  def evaluate(game, player), do: evaluate(game, player, terrain(game.board, Map.get(game, :forests, [])))
+  def evaluate(game, player), do: evaluate(game, player, terrain(game.board, Map.get(game, :forests, []), game))
   def evaluate(%{result: %{winner: winner}}, player, _terrain) do
     cond do winner == player -> 1_000_000; winner == 0 -> 0; true -> -1_000_000 end
   end
@@ -524,10 +524,14 @@ defmodule GameSimulator.Traversal.Bot do
     score = if player == 1, do: a - b, else: b - a
     tactical = if Map.get(terrain, :tactical, true), do: exit_threat_score(game, player), else: 0
     interception_score(game, player, terrain) + tactical + score * 500 + Enum.reduce(Game.active(game), 0, fn piece, sum ->
-      progress = 9 - abs(piece.row - Game.last_row(piece.player))
+      progress = length(game.board) - 1 - abs(piece.row - Game.last_row(piece.player, game))
       neighbours = Game.neighbours(piece.row, piece.col) |> Enum.map(fn {r, c} -> Game.occupant(game, r, c) end) |> Enum.reject(&is_nil/1)
       support = Enum.count(neighbours, &(&1.player == piece.player))
-      threats = Enum.count(neighbours, fn enemy -> enemy.player != piece.player and Game.combat(game, enemy, piece, 1).attack >= Game.combat(game, enemy, piece, 1).defence end)
+      threats = Enum.count(neighbours, fn enemy -> enemy.player != piece.player and enemy.type != "cannon" and Game.combat(game, enemy, piece, 1).attack >= Game.combat(game, enemy, piece, 1).defence end)
+      threats = threats + Enum.count(Game.active(game), fn enemy ->
+        enemy.player != piece.player and enemy.type == "cannon" and
+          Enum.any?(Game.cannon_actions(game, enemy), &(&1.row == piece.row and &1.col == piece.col))
+      end)
       remaining = terrain |> Map.fetch!(piece.player) |> Map.fetch!({piece.row, piece.col})
       travel = round(remaining / piece.movement * 45)
       sentinel = if piece.type == "sentinel" and game.exited == [] do

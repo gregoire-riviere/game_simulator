@@ -162,3 +162,29 @@ positions still reveal weaknesses, including a winning offensive race abandoned
 on `rush-11` right flank, and hard Forêts on `rush-1` left flank. Those positions
 are not represented as solved. Search results can vary with machine load when
 the deadline interrupts an iteration. Browser validation remains separate.
+
+## Variantes combinables : étendue et pont
+
+Les options sont indépendantes : étendue (12 × 12 et un canon supplémentaire par
+camp), forêts et pont peuvent être combinées. Les requêtes existantes `classic`
+et `forests` restent valides ; les autres combinaisons utilisent les noms séparés
+par `+`. Les plateaux sont validés pour la taille associée à la variante.
+
+Le canon (force 2, déplacement 2) se déplace ou tire. Son tir orthogonal de 2 à
+3 cases capture sans déplacer le canon ; les pièces intermédiaires bloquent le
+tir, ainsi qu'une cible plus haute. Les règles de combat et de soutien habituelles
+s'appliquent. Il ne peut pas tirer depuis une forêt ni attaquer à une case.
+Sa sortie vaut 2 points.
+
+La rivière suit la frontière entre les deux rangées centrales. Les passages sont
+aux colonnes B, centrale et avant-dernière ; les deux latéraux restent ouverts.
+Le pont central alterne deux coups individuels ouvert et deux fermé. Il reste ouvert
+si l'une de ses deux cases est occupée ; le cycle continue et la fermeture prend
+effet lorsque le pont est vide pendant une phase fermée. Un tir de canon peut
+traverser un passage, même si le pont central est fermé, mais pas la rivière ailleurs.
+La phase et l'état sont inclus dans l'identité de position et dans le résumé v3.
+
+Les bots utilisent les coups légaux du moteur pour leurs recherches. Les champs de
+distance tiennent compte de l'état actuel du pont, estimation susceptible de
+changer pendant la recherche. Les budgets temporels restent bornés, sans garantie
+de niveau équivalent sur le plateau étendu.
