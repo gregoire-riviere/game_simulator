@@ -176,13 +176,16 @@ tir, ainsi qu'une cible plus haute. Les règles de combat et de soutien habituel
 s'appliquent. Il ne peut pas tirer depuis une forêt ni attaquer à une case.
 Sa sortie vaut 2 points.
 
-La rivière suit la frontière entre les deux rangées centrales. Les passages sont
-aux colonnes B, centrale et avant-dernière ; les deux latéraux restent ouverts.
-Le pont central alterne deux coups individuels ouvert et deux fermé. Il reste ouvert
-si l'une de ses deux cases est occupée ; le cycle continue et la fermeture prend
-effet lorsque le pont est vide pendant une phase fermée. Un tir de canon peut
-traverser un passage, même si le pont central est fermé, mais pas la rivière ailleurs.
-La phase et l'état sont inclus dans l'identité de position et dans le résumé v3.
+La rivière occupe une rangée de cases au milieu du plateau. Deux ponts permettent
+la traversée : le pont mobile à la colonne `taille / 2 - 2` (index zéro) et le pont
+fixe à `taille / 2 + 1`. Les cases d'eau sont infranchissables, y compris en saut.
+Le pont mobile alterne deux coups individuels ouvert et deux fermé. Il reste ouvert
+si sa case est occupée ; le cycle continue et la fermeture prend effet lorsque la
+case est libre pendant une phase fermée. Un canon peut tirer au-dessus d'un pont
+fermé, mais pas au-dessus de l'eau ailleurs. Les forêts évitent la rivière.
+La phase, l'état, la rangée et les colonnes des ponts figurent dans le résumé v4.
+Sur un plateau de taille paire, une rangée centrale occupe nécessairement une des
+deux moitiés : elle est ici légèrement plus proche du camp du joueur 1.
 
 Les bots utilisent les coups légaux du moteur pour leurs recherches. Les champs de
 distance tiennent compte de l'état actuel du pont, estimation susceptible de

@@ -60,10 +60,10 @@ export function mountTraversal(page, api) {
     if (!state?.game) return 'Aucune partie en cours.';
     const game = state.game;
     const lines = [
-      'TRAVERSAL replay v3',
+      'TRAVERSAL replay v4',
       'Bot=' + state.difficulty + ' variant=' + game.variant + ' seed=' + JSON.stringify(state.seed),
       'Board=' + game.board.map(row => row.join('')).join('/'),
-      'Bridge=' + (game.variant.includes('bridge') ? ('open:' + game.bridge_open + ',phase:' + (game.moves % 4)) : 'none'),
+      'Bridge=' + (game.variant.includes('bridge') ? ('river_row:' + (game.board.length / 2 + 1) + ',moving_col:' + String.fromCharCode(65 + game.board.length / 2 - 2) + ',fixed_col:' + String.fromCharCode(65 + game.board.length / 2 + 1) + ',open:' + game.bridge_open + ',phase:' + (game.moves % 4)) : 'none'),
       'Forests=' + (game.forests || []).map(p => coord([p.row, p.col])).sort().join(','),
       'Pieces=' + game.pieces.map(p => p.id + ':' + p.type[0].toUpperCase() + ':' + p.status[0] + ':' + coord([p.row, p.col])).join(','),
       'Moves=' + game.moves + ' turn=' + game.turn + ' scores=' + game.scores.join('-') +
@@ -155,6 +155,8 @@ export function mountTraversal(page, api) {
   }
 
   const forestAt = (row, col) => (state?.game?.forests || []).some(cell => cell.row === row && cell.col === col);
+  const riverAt = (row, size) => Boolean(state?.game?.variant.includes('bridge')) && row === size / 2;
+  const bridgeAt = (row, col, size) => riverAt(row, size) && (col === size / 2 + 1 || (col === size / 2 - 2 && state.game.bridge_open));
   function trees(x, z, height, center) {
     // Corner trees leave the central piece and destination ring visible.
     for (const [dx, dz] of [[-0.34, -0.34], [0.34, 0.34]]) {
@@ -180,12 +182,29 @@ export function mountTraversal(page, api) {
       for (let x = 0; x < size; x += 1) {
         const height = heights[z][x];
         const thickness = 0.24 + height * 0.16;
-        const color = new THREE.Color().setHSL(0.105, 0.30, 0.72 - height * 0.025 + (x + z) % 2 * 0.015);
-        const tile = new THREE.Mesh(new THREE.BoxGeometry(0.96, thickness, 0.96), new THREE.MeshStandardMaterial({ color, roughness: 0.85 }));
-        tile.position.set(x - center, thickness / 2, z - center);
+        const river = riverAt(z, size);
+        const bridge = bridgeAt(z, x, size);
+        const color = river ? (bridge ? 0x987a52 : 0x2f91ac) : new THREE.Color().setHSL(0.105, 0.30, 0.72 - height * 0.025 + (x + z) % 2 * 0.015);
+        const tileHeight = river && !bridge ? 0.12 : thickness;
+        const tile = new THREE.Mesh(new THREE.BoxGeometry(0.96, tileHeight, 0.96), new THREE.MeshStandardMaterial({ color, roughness: 0.85 }));
+        tile.position.set(x - center, tileHeight / 2, z - center);
         tile.userData = { row: z, col: x };
         targets.push(tile);
         terrain.add(tile);
+        if (bridge) {
+          for (const dx of [-0.43, 0.43]) {
+            const rail = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.16, 0.96), new THREE.MeshStandardMaterial({ color: 0x5a4839, roughness: 0.8 }));
+            rail.position.set(x - center + dx, thickness + 0.08, z - center);
+            terrain.add(rail);
+          }
+        } else if (river && x === size / 2 - 2) {
+          // Two folded halves make the closed movable bridge identifiable.
+          for (const dz of [-0.35, 0.35]) {
+            const folded = new THREE.Mesh(new THREE.BoxGeometry(0.82, 0.24, 0.16), new THREE.MeshStandardMaterial({ color: 0x8d4940, roughness: 0.8 }));
+            folded.position.set(x - center, 0.24, z - center + dz);
+            terrain.add(folded);
+          }
+        }
         if (forestAt(z, x)) trees(x, z, thickness, center);
         const playerPiece = state?.game?.pieces.find(p => p.status === 'active' && p.row === z && p.col === x);
         if (playerPiece) {
@@ -227,18 +246,6 @@ export function mountTraversal(page, api) {
       targets.push(marker);
       terrain.add(marker);
     }
-    if (state?.game?.variant.includes('bridge')) {
-      // The river follows the boundary between the two central rows.
-      const river = new THREE.Mesh(new THREE.BoxGeometry(size, 0.06, 0.09), new THREE.MeshBasicMaterial({color: 0x3584a4}));
-      river.position.set(0, 1.08, 0);
-      terrain.add(river);
-      for (const col of [1, size / 2, size - 2]) {
-        const active = col !== size / 2 || state.game.bridge_open;
-        const crossing = new THREE.Mesh(new THREE.BoxGeometry(0.65, 0.08, 0.16), new THREE.MeshBasicMaterial({color: active ? 0xf3d17b : 0x8d4940}));
-        crossing.position.set(col - center, 1.13, 0);
-        terrain.add(crossing);
-      }
-    }
     updateStatus();
     const header = page.querySelector('#traversal-head');
     const headerRow = document.createElement('tr');
@@ -257,8 +264,10 @@ export function mountTraversal(page, api) {
       tr.append(header);
       row.forEach((height, x) => {
         const td = document.createElement('td');
-        td.textContent = `${height}${forestAt(z, x) ? " F" : ""}`;
-        if (forestAt(z, x)) td.setAttribute("aria-label", `Hauteur ${height}, forêt`);
+        const river = riverAt(z, size), bridge = bridgeAt(z, x, size);
+        td.textContent = river && !bridge ? "Eau" : `${height}${bridge ? " P" : forestAt(z, x) ? " F" : ""}`;
+        if (river) td.setAttribute("aria-label", bridge ? `Hauteur ${height}, pont` : x === size / 2 - 2 ? "Rivière, pont fermé" : "Rivière, case inaccessible");
+        else if (forestAt(z, x)) td.setAttribute("aria-label", `Hauteur ${height}, forêt`);
         tr.append(td);
       });
       body.append(tr);

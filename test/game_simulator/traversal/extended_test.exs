@@ -12,6 +12,7 @@ defmodule GameSimulator.Traversal.ExtendedTest do
     assert length(g.pieces) == 14
     assert length(g.forests) == 8
     assert g.forests == Variant.forests("extended+forests+bridge", "seed", 12)
+    refute Enum.any?(g.forests, &(&1.row == 6))
     for p <- Enum.filter(g.pieces, &(&1.player == 1)) do
       assert Enum.any?(g.pieces, &(&1.player == 2 and &1.type == p.type and &1.row == 11 - p.row and &1.col == 11 - p.col))
     end
@@ -44,18 +45,57 @@ defmodule GameSimulator.Traversal.ExtendedTest do
   end
 
   test "bridge cycle, occupied delay, river crossing and firing over closed bridge" do
-    cannon = piece("cannon", 1, 7, 6, "c")
-    target = piece("explorer", 2, 4, 6, "t")
+    cannon = piece("cannon", 1, 7, 4, "c")
+    target = piece("explorer", 2, 4, 4, "t")
     g = %{Game.new(board(12), "extended+bridge") | pieces: [cannon, target], moves: 2, bridge_open: false}
-    assert action(g, "c", 4, 6).kind == "attack"
-    assert Game.crossing?(g, 6, 6, 5, 6) == false
-    assert Game.crossing?(g, 6, 1, 5, 1)
-    assert not Game.crossing?(g, 6, 4, 5, 4, true)
-    blocker = piece("vanguard", 1, 6, 6, "v")
+    assert action(g, "c", 4, 4).kind == "attack"
+    refute Game.crossing?(g, 7, 4, 6, 4)
+    assert Game.crossing?(g, 7, 7, 6, 7)
+    refute Game.crossing?(g, 7, 2, 5, 2, true)
+    blocker = piece("vanguard", 1, 6, 4, "v")
     assert Game.next_bridge(%{g | pieces: [blocker, target]}).bridge_open
     assert not Game.next_bridge(g).bridge_open
     assert Game.next_bridge(%{g | moves: 4}).bridge_open
     refute Game.position(g) == Game.position(%{g | moves: 3})
+  end
+
+  test "river occupies one whole row, except its two bridges" do
+    for size <- [10, 12] do
+      mid = div(size, 2)
+      explorer = piece("explorer", 1, mid + 1, mid - 2, "e")
+      target = piece("sentinel", 2, 0, 0, "t")
+      g = %{Game.new(board(size), "bridge") | pieces: [explorer, target]}
+      assert action(g, "e", mid, mid - 2)
+      assert action(g, "e", mid - 1, mid - 2)
+      refute action(%{g | bridge_open: false}, "e", mid, mid - 2)
+      refute action(%{g | bridge_open: false}, "e", mid - 1, mid - 2)
+      for col <- 0..(size - 1), col not in [mid - 2, mid + 1] do
+        refute Game.crossing?(g, mid + 1, col, mid, col)
+        refute Game.crossing?(g, mid + 1, col, mid - 1, col)
+      end
+      assert Game.crossing?(%{g | bridge_open: false}, mid + 1, mid + 1, mid, mid + 1)
+    end
+  end
+
+  test "forest layouts stay symmetric and never overlap the river" do
+    for size <- [10, 12], seed <- 1..100 do
+      cells = Variant.forests("forests+bridge", "seed-#{seed}", size)
+      assert length(cells) == 8
+      refute Enum.any?(cells, &(&1.row == div(size, 2)))
+      assert Enum.all?(cells, fn p -> %{row: size - 1 - p.row, col: size - 1 - p.col} in cells end)
+    end
+  end
+
+  test "occupied bridge stays open until the piece leaves during a closed phase" do
+    bridge_piece = piece("vanguard", 1, 6, 4, "v")
+    ally = piece("explorer", 1, 10, 0, "a")
+    enemy = piece("explorer", 2, 1, 0, "t")
+    g = %{Game.new(board(12), "extended+bridge") | pieces: [bridge_piece, ally, enemy], moves: 1}
+    {:ok, held} = Game.play(g, "a", 9, 0)
+    assert held.bridge_open
+    held = %{held | turn: 1}
+    {:ok, left} = Game.play(held, "v", 5, 4)
+    refute left.bridge_open
   end
 
   test "bots choose legal actions in combined variant" do

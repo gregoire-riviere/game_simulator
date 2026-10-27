@@ -30,12 +30,17 @@ defmodule GameSimulator.Traversal.Game do
 
   def bridge?(game), do: "bridge" in String.split(Map.get(game, :variant, "classic"), "+")
   def crossing?(game, r, c, nr, nc, firing \\ false) do
-    mid = div(length(game.board), 2)
-    across = (r < mid and nr >= mid) or (r >= mid and nr < mid)
-    if not bridge?(game) or not across do
+    size = length(game.board)
+    river = div(size, 2)
+    steps = max(abs(nr - r), abs(nc - c))
+    if not bridge?(game) or steps == 0 do
       true
     else
-      c == nc and (c in [1, length(game.board) - 2] or (c == mid and (firing or game.bridge_open)))
+      Enum.all?(0..steps, fn step ->
+        row = r + div((nr - r) * step, steps)
+        col = c + div((nc - c) * step, steps)
+        row != river or col == div(size, 2) + 1 or (col == div(size, 2) - 2 and (firing or game.bridge_open))
+      end)
     end
   end
 
@@ -43,7 +48,7 @@ defmodule GameSimulator.Traversal.Game do
     if bridge?(game) do
       size = length(game.board)
       mid = div(size, 2)
-      occupied = occupant(game, mid - 1, mid) != nil or occupant(game, mid, mid) != nil
+      occupied = occupant(game, mid, mid - 2) != nil
       %{game | bridge_open: rem(game.moves, 4) < 2 or occupied}
     else
       game
