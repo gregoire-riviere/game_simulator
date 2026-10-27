@@ -254,24 +254,33 @@
           </div></header>
           <div class="traversal-toolbar">
             <form id="traversal-form">
-              <label for="traversal-seed">Graine du terrain</label>
-              <div class="traversal-seed-actions">
-                <input id="traversal-seed" value="traversal-001" maxlength="80" required />
-                <label for="traversal-difficulty">Bot</label>
-                <select id="traversal-difficulty"><option value="easy">Facile</option><option value="medium" selected>Moyen</option><option value="hard">Difficile</option></select>
-                <label><input id="traversal-extended" type="checkbox" /> Étendu 12 × 12 + canons</label>
-                <label><input id="traversal-forests" type="checkbox" /> Forêts</label>
-                <label><input id="traversal-bridge" type="checkbox" /> Pont</label>
-                <button class="leave-table-button" type="submit">Nouvelle partie</button>
+              <div class="traversal-fields">
+                <div class="traversal-field">
+                  <label for="traversal-seed">Graine du terrain</label>
+                  <input id="traversal-seed" value="traversal-001" maxlength="80" required />
+                </div>
+                <div class="traversal-field traversal-difficulty-field">
+                  <label for="traversal-difficulty">Difficulté du bot</label>
+                  <select id="traversal-difficulty"><option value="easy">Facile</option><option value="medium" selected>Moyen</option><option value="hard">Difficile</option></select>
+                </div>
+              </div>
+              <fieldset class="traversal-variants">
+                <legend>Options de partie</legend>
+                <div class="traversal-variant-options">
+                  <label><input id="traversal-extended" type="checkbox" /> <span>Plateau 12 × 12 + canons</span></label>
+                  <label><input id="traversal-forests" type="checkbox" /> <span>Forêts</span></label>
+                  <label><input id="traversal-bridge" type="checkbox" /> <span>Pont</span></label>
+                </div>
+              </fieldset>
+              <div class="traversal-form-actions">
+                <button class="leave-table-button traversal-start" type="submit">Nouvelle partie</button>
                 <button id="traversal-new" class="leave-table-button" type="button">Nouvelle graine</button>
               </div>
             </form>
-            <div class="traversal-camera">
-              <button id="traversal-top" class="leave-table-button" type="button">Vue de dessus</button>
-              <button id="traversal-reset" class="leave-table-button" type="button">Réinitialiser la vue</button>
-            </div>
           </div>
           <div class="traversal-camera">
+            <button id="traversal-top" class="leave-table-button" type="button">Vue de dessus</button>
+            <button id="traversal-reset" class="leave-table-button" type="button">Réinitialiser la vue</button>
             <button id="traversal-export" class="leave-table-button" type="button">Copier le résumé de partie</button>
             <span id="traversal-export-status" role="status" aria-live="polite"></span>
           </div>
