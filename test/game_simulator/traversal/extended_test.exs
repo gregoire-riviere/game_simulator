@@ -18,6 +18,13 @@ defmodule GameSimulator.Traversal.ExtendedTest do
     assert Variant.valid?(g.variant, "seed")
   end
 
+  test "legacy game states without a variant retain the classic rules" do
+    g = Game.new(board(10)) |> Map.delete(:variant) |> Map.delete(:bridge_open)
+    refute Game.bridge?(g)
+    assert Game.actions(g) != []
+    assert Game.apply_action(g, hd(Game.actions(g))).moves == 1
+  end
+
   test "cannon fires only at distance, does not move and obeys blockers and forest" do
     cannon = piece("cannon", 1, 7, 4, "c")
     target = piece("explorer", 2, 4, 4, "t")

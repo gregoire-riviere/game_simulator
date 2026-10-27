@@ -28,7 +28,7 @@ defmodule GameSimulator.Traversal.Game do
     %{board: board, variant: variant, forests: GameSimulator.Traversal.Variant.forests(variant, seed, size), bridge_open: true, pieces: pieces, turn: 1, moves: 0, exited: [], scores: [0, 0], result: nil, history: []}
   end
 
-  def bridge?(game), do: "bridge" in String.split(game.variant, "+")
+  def bridge?(game), do: "bridge" in String.split(Map.get(game, :variant, "classic"), "+")
   def crossing?(game, r, c, nr, nc, firing \\ false) do
     mid = div(length(game.board), 2)
     across = (r < mid and nr >= mid) or (r >= mid and nr < mid)
