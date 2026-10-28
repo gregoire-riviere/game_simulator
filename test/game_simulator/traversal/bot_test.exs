@@ -405,4 +405,66 @@ defmodule GameSimulator.Traversal.BotTest do
     assert Game.apply_action(near_exit, move).result == %{winner: 1, reason: "two_exits"}
   end
 
+
+  test "hard reserves defensive root moves even below positional top-N" do
+    state = %{game([
+      piece("sentinel", 1, 6, 0, "runner"),
+      piece("sentinel", 2, 3, 4, "guard"),
+      piece("explorer", 2, 2, 9, "decoy")
+    ]) | turn: 2}
+    # A deliberately misleading static rank: all explorer development moves
+    # come before any movement toward the dangerous lateral Sentinel.
+    options = Game.actions(state)
+      |> Enum.map(fn move ->
+        {move, if(move.piece == "decoy", do: 1_000, else: -100)}
+      end)
+      |> Enum.sort_by(fn {_move, score} -> -score end)
+    refute Enum.any?(Enum.take(options, 4), fn {move, _} -> move.piece == "guard" end)
+    selected = Bot.strategic_candidates(state, options, 4)
+    assert length(selected) == 4
+    assert Enum.any?(selected, fn {move, _} -> move.piece == "guard" end)
+    assert Enum.all?(selected, fn {move, _} -> move in Game.actions(state) end)
+  end
+
+  @tag timeout: 60_000
+  test "recorded extended bridge replay preserves legal tactical decisions" do
+    heights = "112233333222/222233333222/222333433222/223334443322/233344443333/333444443333/333344444333/333344443332/223344433322/222334333222/222333332222/222333332211"
+      |> String.split("/")
+      |> Enum.map(fn row -> row |> String.graphemes() |> Enum.map(&String.to_integer/1) end)
+    forests = for square <- ["F10", "F11", "F2", "F3", "G10", "G11", "G2", "G3"] do
+      <<col::utf8, row::binary>> = square
+      %{row: String.to_integer(row) - 1, col: col - ?A}
+    end
+    sequence = [
+      {"1-6", "I10"}, {"2-6", "D3"}, {"1-5", "H9"}, {"2-6", "D5"},
+      {"1-0", "D11"}, {"2-6", "E6"}, {"1-5", "H8"}, {"2-1", "I5"},
+      {"1-0", "D8"}, {"2-6", "F8"}, {"1-0", "E9"}
+    ]
+    state = Enum.reduce(sequence,
+      %{Game.new(heights, "extended+forests+bridge", "1731283162") | forests: forests},
+      fn {id, square}, state ->
+        move = move_to(state, id, square)
+        Game.apply_action(state, move)
+      end)
+    assert state.moves == 11 and state.turn == 2
+    assert not state.bridge_open
+    assert Enum.any?(Game.active(state), &(&1.id == "1-0" and &1.row == 8 and &1.col == 4))
+    ranked = Bot.ranked(state, 2, Bot.terrain(state.board, forests, state))
+    pool = Bot.strategic_candidates(state, ranked, Bot.limits("hard").width)
+    assert length(pool) == Bot.limits("hard").width
+    assert Enum.all?(pool, fn {move, _} -> move in Game.actions(state) end)
+    {chosen, trace} = Bot.choose_with_trace(state, "hard")
+    assert chosen in Game.actions(state)
+    assert trace.root_considered <= Bot.limits("hard").width
+    assert trace.chosen == chosen
+  end
+
+  test "hard uses more time but a narrower reply beam than medium" do
+    hard = Bot.limits("hard")
+    assert hard.milliseconds > Bot.limits("medium").milliseconds
+    assert hard.milliseconds <= 3_000
+    assert hard.reply_width < hard.width
+    assert hard.depth == 3
+  end
+
 end
