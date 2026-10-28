@@ -211,7 +211,14 @@ defmodule GameSimulator.Traversal.Bot do
           abs(piece.row - Game.last_row(piece.player, game)) <= 8
       end)
 
-    if runners == [] do
+    # An Explorer already at the end of the board is a more immediate
+    # tactical emergency than a still-distant Sentinel. Do not let the
+    # Sentinel reserve displace those legal Explorer interception options.
+    explorer_alarm = Enum.any?(Game.active(game), fn piece ->
+      piece.player != game.turn and piece.type == "explorer" and
+        abs(piece.row - Game.last_row(piece.player, game)) <= 4
+    end)
+    if runners == [] or explorer_alarm do
       Enum.take(options, width)
     else
       defenders = Map.new(Game.active(game), &{&1.id, &1})
@@ -411,7 +418,7 @@ defmodule GameSimulator.Traversal.Bot do
       []
     else
       Game.active(game)
-      |> Enum.filter(&(&1.player != game.turn and &1.type == "sentinel" and abs(&1.row - Game.last_row(&1.player, game)) <= if(mode == :hard, do: 8, else: 6)))
+      |> Enum.filter(&(&1.player != game.turn and &1.type == "sentinel" and abs(&1.row - Game.last_row(&1.player, game)) <= 6))
       |> Enum.map(fn runner ->
         route = rush_route(game, runner.id, terrain, 0, [])
         defenders = if mode == :regular do
