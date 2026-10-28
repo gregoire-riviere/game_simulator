@@ -114,3 +114,13 @@ test('cannon has its own closed geometry', () => {
   assert.equal(shape.vertices.length, 8);
   assert.equal(shape.triangles.length, 12);
 });
+
+test('Traversal displays a corner spinner only while the bot is thinking', async () => {
+  const view = await readFile(new URL('../../web/assets/traversal/view.js', import.meta.url), 'utf8');
+  const css = await readFile(new URL('../../web/assets/css/app.css', import.meta.url), 'utf8');
+  assert.match(view, /thinkingIndicator\.hidden = !Boolean\(state\?\.thinking && !result\)/);
+  assert.match(view, /traversal-thinking-spinner/);
+  assert.match(css, /\.traversal-canvas \{ position: relative/);
+  assert.match(css, /\.traversal-thinking\[hidden\] \{ display: none/);
+  assert.match(css, /prefers-reduced-motion: reduce/);
+});
