@@ -530,7 +530,10 @@ defmodule GameSimulator.Traversal.Bot do
     else
       maximizing = game.turn == player
       reply_width = Map.get(budget, :reply_width, budget.width)
-      choices = ranked(game, game.turn, budget.terrain) |> Enum.take(reply_width)
+      # At a two-ply horizon, every immediate opponent reply must be checked:
+      # a low-static-score Explorer sprint can be the real tactical threat.
+      width = if depth == 1 and game.turn != player, do: budget.width, else: reply_width
+      choices = ranked(game, game.turn, budget.terrain) |> Enum.take(width)
       if choices == [] do
         {evaluate(game, player, budget.terrain), nodes, []}
       else
