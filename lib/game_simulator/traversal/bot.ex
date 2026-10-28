@@ -17,7 +17,7 @@ defmodule GameSimulator.Traversal.Bot do
     fields = if difficulty == "easy", do: fields, else: Map.put(fields, :interceptions, interceptions(game, fields))
     fields = Map.put(fields, :tactical, difficulty == "hard")
     budget = Map.put(budget, :terrain, fields)
-    deadline = System.monotonic_time(:millisecond) + budget.milliseconds
+    deadline = started + budget.milliseconds
     ranked_options = ranked(game, game.turn, fields)
     static_scores = Map.new(ranked_options)
     medium_alerts = if difficulty == "medium", do: tactical_alerts(game), else: []
