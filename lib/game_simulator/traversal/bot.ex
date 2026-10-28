@@ -208,16 +208,6 @@ defmodule GameSimulator.Traversal.Bot do
         piece.player != game.turn and piece.type == "sentinel" and
           abs(piece.row - Game.last_row(piece.player, game)) <= 8
       end)
-      |> Enum.map(fn runner ->
-        targets = Game.legal(%{game | turn: runner.player}, runner.id)
-          |> Enum.filter(&(&1.kind == "move"))
-          |> Enum.sort_by(fn move ->
-            {abs(move.row - Game.last_row(runner.player, game)), abs(move.col - runner.col)}
-          end)
-          |> Enum.take(6)
-          |> Enum.map(&{&1.row, &1.col})
-        {runner, Enum.uniq([{runner.row, runner.col} | targets])}
-      end)
 
     if runners == [] do
       Enum.take(options, width)
@@ -229,19 +219,34 @@ defmodule GameSimulator.Traversal.Bot do
           priority = if defender.strength < 2 do
             0
           else
-            Enum.reduce(runners, 0, fn {runner, targets}, highest ->
-              from = Enum.map(targets, fn {r, c} ->
-                abs(defender.row - r) + abs(defender.col - c)
-              end) |> Enum.min()
-              to = Enum.map(targets, fn {r, c} ->
-                abs(move.row - r) + abs(move.col - c)
-              end) |> Enum.min()
-              improvement = from - to
+            # Apply the candidate first: only this state has the correct bridge
+            # phase and occupancy for the opponent's upcoming move.
+            next = Game.apply_action(game, move)
+            Enum.reduce(runners, 0, fn runner, highest ->
+              remaining_runner = Enum.find(Game.active(next), &(&1.id == runner.id))
               value = cond do
-                move.kind == "attack" and move.row == runner.row and move.col == runner.col -> 10_000
+                remaining_runner == nil -> 10_000
+                next.result != nil -> 0
                 move.kind != "move" -> 0
-                improvement <= 0 or to > defender.movement + 2 -> 0
-                true -> 100 + improvement * 30 - to * 4
+                true ->
+                  targets = Game.legal(next, runner.id)
+                    |> Enum.filter(&(&1.kind == "move"))
+                    |> Enum.sort_by(fn action ->
+                      {abs(action.row - Game.last_row(runner.player, next)),
+                       abs(action.col - runner.col)}
+                    end)
+                    |> Enum.take(6)
+                    |> Enum.map(&{&1.row, &1.col})
+                  targets = [{runner.row, runner.col} | targets]
+                  from = targets |> Enum.map(fn {r, c} ->
+                    abs(defender.row - r) + abs(defender.col - c)
+                  end) |> Enum.min()
+                  to = targets |> Enum.map(fn {r, c} ->
+                    abs(move.row - r) + abs(move.col - c)
+                  end) |> Enum.min()
+                  improvement = from - to
+                  if improvement > 0 and to <= defender.movement + 2,
+                    do: 100 + improvement * 30 - to * 4, else: 0
               end
               max(highest, value)
             end)
@@ -254,8 +259,7 @@ defmodule GameSimulator.Traversal.Bot do
         end)
         |> Enum.take(min(4, width))
         |> Enum.map(&elem(&1, 0))
-      # Keep all high-ranking strategic choices, then fill the reserved slots.
-      # Refill to width when defensive choices overlap the positional beam.
+      # Keep the high-ranking strategic choices, then fill the reserved slots.
       positional = Enum.take(options, width - length(tactical))
       selected = Enum.uniq_by(positional ++ tactical, &elem(&1, 0))
       selected_ids = MapSet.new(Enum.map(selected, &elem(&1, 0)))
