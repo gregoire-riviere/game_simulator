@@ -4,7 +4,7 @@ defmodule GameSimulator.Traversal.Bot do
 
   def limits("easy"), do: %{depth: 1, width: 1, nodes: 0, milliseconds: 0}
   def limits("medium"), do: %{depth: 2, width: 12, nodes: 500, milliseconds: 800}
-  def limits("hard"), do: %{depth: 3, width: 18, nodes: 2500, milliseconds: 1600}
+  def limits("hard"), do: %{depth: 3, width: 12, reply_width: 7, nodes: 2500, milliseconds: 2450}
 
   # Keep the simple API for existing callers. The session records the exact trace
   # returned by the same search that selected the action.
@@ -30,7 +30,9 @@ defmodule GameSimulator.Traversal.Bot do
     case options do
       [] -> {nil, nil}
       [{fallback, _} | _] ->
-        candidates = Enum.take(options, budget.width)
+        candidates = if difficulty == "hard",
+          do: strategic_candidates(game, options, budget.width),
+          else: Enum.take(options, budget.width)
         initial = {fallback, 1, [], nil, budget.nodes, "preselection"}
         {chosen, depth, scored, last_attempt, remaining, stop} =
           if difficulty == "easy" do
@@ -95,8 +97,11 @@ defmodule GameSimulator.Traversal.Bot do
         if exhausted?(left, deadline) do
           {:halt, {best, score, left, entries, false, false}}
         else
+          # Reuse the best root value as alpha, so inferior alternatives can be
+          # pruned during the opponent's reply search.
+          root_alpha = if best == nil, do: -2_000_000, else: score
           {value, remaining, line} =
-            search_line(Game.apply_action(game, move), depth - 1, game.turn, budget, left - 1, deadline, -2_000_000, 2_000_000)
+            search_line(Game.apply_action(game, move), depth - 1, game.turn, budget, left - 1, deadline, root_alpha, 2_000_000)
           valid = not exhausted?(remaining, deadline)
           entry = %{
             move: move, adjusted: adjusted, searched: if(valid, do: value, else: nil),
@@ -191,6 +196,73 @@ defmodule GameSimulator.Traversal.Bot do
     Enum.uniq(prioritized ++ ids)
     |> Enum.take(6)
     |> Enum.map(fn move -> Enum.find(candidates, &(elem(&1, 0) == move)) end)
+  end
+
+  # Hard-only root selection: positional ranking alone can discard the move
+  # that blocks a fast Sentinel on the opposite flank. Reserve up to four
+  # candidates for legal defensive development, while still comparing them in
+  # the same minimax search. This is only ordering, not a forced move.
+  def strategic_candidates(game, options, width) do
+    runners = Game.active(game)
+      |> Enum.filter(fn piece ->
+        piece.player != game.turn and piece.type == "sentinel" and
+          abs(piece.row - Game.last_row(piece.player, game)) <= 8
+      end)
+      |> Enum.map(fn runner ->
+        targets = Game.legal(%{game | turn: runner.player}, runner.id)
+          |> Enum.filter(&(&1.kind == "move"))
+          |> Enum.sort_by(fn move ->
+            {abs(move.row - Game.last_row(runner.player, game)), abs(move.col - runner.col)}
+          end)
+          |> Enum.take(6)
+          |> Enum.map(&{&1.row, &1.col})
+        {runner, Enum.uniq([{runner.row, runner.col} | targets])}
+      end)
+
+    if runners == [] do
+      Enum.take(options, width)
+    else
+      defenders = Map.new(Game.active(game), &{&1.id, &1})
+      tactical = options
+        |> Enum.map(fn {move, adjusted} = entry ->
+          defender = Map.fetch!(defenders, move.piece)
+          priority = if defender.strength < 2 do
+            0
+          else
+            Enum.reduce(runners, 0, fn {runner, targets}, highest ->
+              from = Enum.map(targets, fn {r, c} ->
+                abs(defender.row - r) + abs(defender.col - c)
+              end) |> Enum.min()
+              to = Enum.map(targets, fn {r, c} ->
+                abs(move.row - r) + abs(move.col - c)
+              end) |> Enum.min()
+              improvement = from - to
+              value = cond do
+                move.kind == "attack" and move.row == runner.row and move.col == runner.col -> 10_000
+                move.kind != "move" -> 0
+                improvement <= 0 or to > defender.movement + 2 -> 0
+                true -> 100 + improvement * 30 - to * 4
+              end
+              max(highest, value)
+            end)
+          end
+          {entry, priority, adjusted}
+        end)
+        |> Enum.filter(fn {_, priority, _} -> priority > 0 end)
+        |> Enum.sort_by(fn {{move, _}, priority, adjusted} ->
+          {-priority, -adjusted, move.piece, move.row, move.col}
+        end)
+        |> Enum.take(min(4, width))
+        |> Enum.map(&elem(&1, 0))
+      # Keep all high-ranking strategic choices, then fill the reserved slots.
+      # Refill to width when defensive choices overlap the positional beam.
+      positional = Enum.take(options, width - length(tactical))
+      selected = Enum.uniq_by(positional ++ tactical, &elem(&1, 0))
+      selected_ids = MapSet.new(Enum.map(selected, &elem(&1, 0)))
+      selected ++ (options
+        |> Enum.reject(fn {move, _} -> MapSet.member?(selected_ids, move) end)
+        |> Enum.take(width - length(selected)))
+    end
   end
 
   # Only re-evaluate the promising root choices to preserve the response budget.
@@ -332,12 +404,26 @@ defmodule GameSimulator.Traversal.Bot do
       []
     else
       Game.active(game)
-      |> Enum.filter(&(&1.player != game.turn and &1.type == "sentinel" and abs(&1.row - Game.last_row(&1.player, game)) <= 6))
+      |> Enum.filter(&(&1.player != game.turn and &1.type == "sentinel" and abs(&1.row - Game.last_row(&1.player, game)) <= 8))
       |> Enum.map(fn runner ->
         route = rush_route(game, runner.id, terrain, 0, [])
-        defenders = Game.active(game) |> Enum.filter(&(&1.player == game.turn))
-          |> Enum.sort_by(fn piece -> {-piece.strength, abs(piece.row - runner.row) + abs(piece.col - runner.col), piece.id} end)
-          |> Enum.take(2)
+        defenders = Game.active(game)
+          |> Enum.filter(&(&1.player == game.turn and &1.strength >= 2))
+        # Always consider the nearest Sentinel, plus the fastest other capable
+        # interceptor. A distant strong Sentinel is not automatically the best
+        # defender of a lateral route.
+        sentinel = defenders
+          |> Enum.filter(&(&1.type == "sentinel"))
+          |> Enum.min_by(fn piece ->
+            {abs(piece.row - runner.row) + abs(piece.col - runner.col), piece.id}
+          end, fn -> nil end)
+        nearest = defenders
+          |> Enum.reject(&(&1.id == if(sentinel, do: sentinel.id, else: nil)))
+          |> Enum.min_by(fn piece ->
+            {div(abs(piece.row - runner.row) + abs(piece.col - runner.col) + piece.movement - 1, piece.movement),
+             -piece.strength, piece.id}
+          end, fn -> nil end)
+        defenders = Enum.reject([sentinel, nearest], &is_nil/1)
         fields = for {position, turn} <- route, defender <- defenders do
           {defender.id, turn, capture_distances(position, defender.id, runner.id)}
         end
@@ -432,7 +518,8 @@ defmodule GameSimulator.Traversal.Bot do
       {evaluate(game, player, budget.terrain), nodes, []}
     else
       maximizing = game.turn == player
-      choices = ranked(game, game.turn, budget.terrain) |> Enum.take(budget.width)
+      reply_width = Map.get(budget, :reply_width, budget.width)
+      choices = ranked(game, game.turn, budget.terrain) |> Enum.take(reply_width)
       if choices == [] do
         {evaluate(game, player, budget.terrain), nodes, []}
       else
