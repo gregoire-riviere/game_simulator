@@ -111,6 +111,15 @@ export function mountTraversal(page, api) {
   renderer.setClearColor(0xd8cbb6);
   renderer.domElement.setAttribute('aria-label', 'Plateau de relief 3D : 10 lignes et 10 colonnes');
   host.replaceChildren(renderer.domElement);
+  // The API already exposes state.thinking while the asynchronous GenServer
+  // computes. Keep a small, non-interactive corner indicator on the board.
+  const thinkingIndicator = document.createElement('div');
+  thinkingIndicator.className = 'traversal-thinking';
+  thinkingIndicator.setAttribute('role', 'status');
+  thinkingIndicator.setAttribute('aria-live', 'polite');
+  thinkingIndicator.innerHTML = '<span class="traversal-thinking-spinner" aria-hidden="true"></span><span>Le bot réfléchit…</span>';
+  thinkingIndicator.hidden = true;
+  host.append(thinkingIndicator);
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 100);
   const controls = new OrbitControls(camera, renderer.domElement);
@@ -291,6 +300,7 @@ export function mountTraversal(page, api) {
   function updateStatus() {
     const game = state?.game;
     const result = game?.result;
+    thinkingIndicator.hidden = !Boolean(state?.thinking && !result);
     const reasonNames = { first_sentinel: 'premier Sentinel sorti', two_exits: 'deux pièces sorties', no_active_pieces: 'un camp sans pièce active', move_limit_score: 'limite de 200 coups, score', move_limit_advancement: 'limite de 200 coups, progression puis force', threefold_repetition: 'répétition de séquence trois fois' };
     const difficulties = { easy: 'facile', medium: 'moyen', hard: 'difficile' };
     const phase = game?.moves % 4;
