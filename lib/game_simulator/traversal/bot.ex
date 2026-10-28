@@ -537,9 +537,10 @@ defmodule GameSimulator.Traversal.Bot do
     else
       maximizing = game.turn == player
       reply_width = Map.get(budget, :reply_width, budget.width)
-      # At a two-ply horizon, every immediate opponent reply must be checked:
-      # a low-static-score Explorer sprint can be the real tactical threat.
-      width = if depth == 1 and game.turn != player, do: budget.width, else: reply_width
+      # At ANY depth the opponent must be allowed its full reply beam.
+      # Selective pruning of opponent replies hides low-static tactical sprints
+      # and breaks minimax's worst-case guarantee. Narrow our own moves only.
+      width = if game.turn != player, do: budget.width, else: reply_width
       choices = ranked(game, game.turn, budget.terrain) |> Enum.take(width)
       if choices == [] do
         {evaluate(game, player, budget.terrain), nodes, []}
