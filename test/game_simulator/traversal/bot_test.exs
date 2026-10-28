@@ -125,7 +125,7 @@ defmodule GameSimulator.Traversal.BotTest do
         after_sprint = Game.apply_action(response, sprint)
         assert Enum.any?(Game.actions(after_sprint), fn action ->
           action.kind == "attack" and action.row == 3 and action.col == 8
-        end), "hard must retain a legal interception after F5>I4, got #{inspect(chosen)}"
+        end), "hard must retain a legal interception after F5>I4, got #{inspect(chosen)}, trace=#{inspect(trace)}"
     end
   end
 
