@@ -292,8 +292,13 @@ button:disabled { cursor: wait; opacity: .65; }
 .traversal-form-actions .traversal-start:hover { color: #07111d; border-color: #bae6fd; background: #bae6fd; }
 .traversal-camera { align-items: center; margin-bottom: .85rem; }
 @media (max-width: 36rem) { .traversal-difficulty-field { flex: 1 1 10rem; } }
-.traversal-canvas { width: 100%; height: clamp(22rem, 61vh, 44rem); overflow: hidden; border: 1px solid #ffffff29; border-radius: 1rem; background: #101a2a; }
+.traversal-canvas { position: relative; width: 100%; height: clamp(22rem, 61vh, 44rem); overflow: hidden; border: 1px solid #ffffff29; border-radius: 1rem; background: #101a2a; }
 .traversal-canvas canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+.traversal-thinking { position: absolute; top: .8rem; right: .8rem; display: flex; align-items: center; gap: .55rem; padding: .5rem .75rem; border: 1px solid #7dd3fc66; border-radius: 999px; color: #e0f2fe; background: #0b172be8; box-shadow: 0 3px 14px #02061766; font-size: .8rem; font-weight: 600; pointer-events: none; z-index: 2; }
+.traversal-thinking[hidden] { display: none; }
+.traversal-thinking-spinner { width: .85rem; height: .85rem; border: 2px solid #7dd3fc66; border-top-color: #bae6fd; border-radius: 50%; animation: traversal-spin .75s linear infinite; }
+@keyframes traversal-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .traversal-thinking-spinner { animation: none; border-top-color: #e0f2fe; } }
 .traversal-status { color: #a5f3fc; font-size: .9rem; }
 .traversal-help { color: #aab4ca; font-size: .85rem; line-height: 1.5; }
 .traversal-data { margin: 1.5rem 0; overflow: auto; color: #cbd5e1; }
