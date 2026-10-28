@@ -4,7 +4,7 @@ defmodule GameSimulator.Traversal.Bot do
 
   def limits("easy"), do: %{depth: 1, width: 1, nodes: 0, milliseconds: 0}
   def limits("medium"), do: %{depth: 2, width: 12, nodes: 500, milliseconds: 800}
-  def limits("hard"), do: %{depth: 3, width: 12, reply_width: 7, nodes: 2500, milliseconds: 2450}
+  def limits("hard"), do: %{depth: 3, width: 18, reply_width: 7, nodes: 2500, milliseconds: 2450}
 
   # Keep the simple API for existing callers. The session records the exact trace
   # returned by the same search that selected the action.
@@ -14,7 +14,9 @@ defmodule GameSimulator.Traversal.Bot do
     started = System.monotonic_time(:millisecond)
     budget = limits(difficulty)
     fields = terrain(game.board, Map.get(game, :forests, []), game)
-    fields = if difficulty == "easy", do: fields, else: Map.put(fields, :interceptions, interceptions(game, fields))
+    fields = if difficulty == "easy", do: fields,
+      else: Map.put(fields, :interceptions,
+        interceptions(game, fields, if(difficulty == "hard", do: :hard, else: :regular)))
     fields = Map.put(fields, :tactical, difficulty == "hard")
     budget = Map.put(budget, :terrain, fields)
     deadline = started + budget.milliseconds
@@ -403,31 +405,36 @@ defmodule GameSimulator.Traversal.Bot do
   # Project each incoming Sentinel along legal fastest advances. The reply fields
   # count whole legal turns until a real capture, including blockers and forests.
   # They are built once at the root; search reuses them as a positional estimate.
-  def interceptions(game, terrain) do
+  def interceptions(game, terrain), do: interceptions(game, terrain, :regular)
+  defp interceptions(game, terrain, mode) do
     if game.result != nil do
       []
     else
       Game.active(game)
-      |> Enum.filter(&(&1.player != game.turn and &1.type == "sentinel" and abs(&1.row - Game.last_row(&1.player, game)) <= 8))
+      |> Enum.filter(&(&1.player != game.turn and &1.type == "sentinel" and abs(&1.row - Game.last_row(&1.player, game)) <= if(mode == :hard, do: 8, else: 6)))
       |> Enum.map(fn runner ->
         route = rush_route(game, runner.id, terrain, 0, [])
-        defenders = Game.active(game)
-          |> Enum.filter(&(&1.player == game.turn and &1.strength >= 2))
-        # Always consider the nearest Sentinel, plus the fastest other capable
-        # interceptor. A distant strong Sentinel is not automatically the best
-        # defender of a lateral route.
-        sentinel = defenders
-          |> Enum.filter(&(&1.type == "sentinel"))
-          |> Enum.min_by(fn piece ->
-            {abs(piece.row - runner.row) + abs(piece.col - runner.col), piece.id}
-          end, fn -> nil end)
-        nearest = defenders
-          |> Enum.reject(&(&1.id == if(sentinel, do: sentinel.id, else: nil)))
-          |> Enum.min_by(fn piece ->
-            {div(abs(piece.row - runner.row) + abs(piece.col - runner.col) + piece.movement - 1, piece.movement),
-             -piece.strength, piece.id}
-          end, fn -> nil end)
-        defenders = Enum.reject([sentinel, nearest], &is_nil/1)
+        defenders = if mode == :regular do
+          # Preserve Medium's established threat model exactly.
+          Game.active(game) |> Enum.filter(&(&1.player == game.turn))
+            |> Enum.sort_by(fn piece -> {-piece.strength, abs(piece.row - runner.row) + abs(piece.col - runner.col), piece.id} end)
+            |> Enum.take(2)
+        else
+          capable = Game.active(game)
+            |> Enum.filter(&(&1.player == game.turn and &1.strength >= 2))
+          sentinel = capable
+            |> Enum.filter(&(&1.type == "sentinel"))
+            |> Enum.min_by(fn piece ->
+              {abs(piece.row - runner.row) + abs(piece.col - runner.col), piece.id}
+            end, fn -> nil end)
+          nearest = capable
+            |> Enum.reject(&(&1.id == if(sentinel, do: sentinel.id, else: nil)))
+            |> Enum.min_by(fn piece ->
+              {div(abs(piece.row - runner.row) + abs(piece.col - runner.col) + piece.movement - 1, piece.movement),
+               -piece.strength, piece.id}
+            end, fn -> nil end)
+          Enum.reject([sentinel, nearest], &is_nil/1)
+        end
         fields = for {position, turn} <- route, defender <- defenders do
           {defender.id, turn, capture_distances(position, defender.id, runner.id)}
         end
