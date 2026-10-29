@@ -66,23 +66,23 @@ defmodule GameSimulator.Traversal.SessionTest do
     assert final.game.moves == 0
     assert final.game.result.winner == 1
   end
-  test "combined game validates size and records bridge state alongside bot analysis" do
+  test "combined game validates size and records bot analysis without bridge state" do
     user = "traversal-extended-#{System.unique_integer([:positive])}"
     {:ok, pid} = Session.server(user)
     on_exit(fn -> if Process.alive?(pid), do: DynamicSupervisor.terminate_child(GameSimulator.TableSupervisor, pid) end)
     board = List.duplicate(List.duplicate(0, 12), 12)
     assert {:error, :invalid_game} = Session.request(user, {:new, board, "easy", "seed", "classic"})
-    {:ok, initial} = Session.request(user, {:new, board, "easy", "seed", "extended+forests+bridge"})
+    {:ok, initial} = Session.request(user, {:new, board, "easy", "seed", "extended+forests"})
     assert length(initial.game.pieces) == 14
     move = hd(initial.legal)
     {:ok, after_human} = Session.request(user, {:move, %{"game_id" => initial.game_id, "revision" => 0, "piece" => move.piece, "row" => move.row, "col" => move.col}})
-    assert hd(after_human.log).bridge_before
-    assert hd(after_human.log).bridge_after
+    refute Map.has_key?(hd(after_human.log), :bridge_before)
+    refute Map.has_key?(hd(after_human.log), :bridge_after)
     {:ok, after_bot} = Session.request(user, :get)
     assert length(after_bot.log) == 2
     assert List.last(after_bot.log).analysis.chosen
-    assert List.last(after_bot.log).bridge_before
-    refute List.last(after_bot.log).bridge_after
+    refute Map.has_key?(List.last(after_bot.log), :bridge_before)
+    refute Map.has_key?(List.last(after_bot.log), :bridge_after)
   end
 
 end

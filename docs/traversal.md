@@ -163,12 +163,13 @@ on `rush-11` right flank, and hard Forêts on `rush-1` left flank. Those positio
 are not represented as solved. Search results can vary with machine load when
 the deadline interrupts an iteration. Browser validation remains separate.
 
-## Variantes combinables : étendue et pont
+## Variantes combinables : étendue et forêts
 
 Les options sont indépendantes : étendue (12 × 12 et un canon supplémentaire par
-camp), forêts et pont peuvent être combinées. Les requêtes existantes `classic`
-et `forests` restent valides ; les autres combinaisons utilisent les noms séparés
-par `+`. Les plateaux sont validés pour la taille associée à la variante.
+camp) et forêts 2 × 2 symétriques peuvent être combinées. Les requêtes existantes
+`classic` et `forests` restent valides ; les autres combinaisons utilisent les noms
+séparés par `+`. Les plateaux sont validés pour la taille associée à la variante.
+Toutes les rangées sont traversables selon les règles normales de déplacement.
 
 Le canon (force 2, déplacement 2) se déplace ou tire. Son tir orthogonal de 2 à
 3 cases capture sans déplacer le canon ; les pièces intermédiaires bloquent le
@@ -176,19 +177,7 @@ tir, ainsi qu'une cible plus haute. Les règles de combat et de soutien habituel
 s'appliquent. Il ne peut pas tirer depuis une forêt ni attaquer à une case.
 Sa sortie vaut 2 points.
 
-La rivière occupe une rangée de cases au milieu du plateau. Deux ponts permettent
-la traversée : le pont mobile à la colonne `taille / 2 - 2` (index zéro) et le pont
-fixe à `taille / 2 + 1`. Les cases d'eau sont infranchissables, y compris en saut.
-Le pont mobile alterne deux coups individuels ouvert et deux fermé. Il reste ouvert
-si sa case est occupée ; le cycle continue et la fermeture prend effet lorsque la
-case est libre pendant une phase fermée. Un canon peut tirer au-dessus d'un pont
-fermé, mais pas au-dessus de l'eau ailleurs. Les forêts évitent la rivière.
-La phase, l'état, la rangée et les colonnes des ponts figurent dans le résumé v4.
-Sur un plateau de taille paire, une rangée centrale occupe nécessairement une des
-deux moitiés : elle est ici légèrement plus proche du camp du joueur 1.
-
-Les bots utilisent les coups légaux du moteur pour leurs recherches. Ils calculent
-les champs de distance pour les deux états du pont et choisissent le champ adapté
-à chaque position simulée. Ces distances restent des estimations : elles ne prennent
-pas en compte les futures ouvertures ou fermetures durant un trajet. Les budgets
+Les bots utilisent les coups légaux du moteur pour leurs recherches. Leurs champs
+de distance tiennent compte du relief et des forêts, sans obstacle périodique.
+Les budgets
 temporels restent bornés, sans garantie de niveau équivalent sur le plateau étendu.

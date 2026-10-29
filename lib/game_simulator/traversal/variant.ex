@@ -9,21 +9,20 @@ defmodule GameSimulator.Traversal.Variant do
 
   def valid_flags?(variant) do
     flags = String.split(variant, "+")
-    (flags == ["classic"] or (flags != [] and Enum.uniq(flags) == flags and Enum.all?(flags, &(&1 in ["extended", "forests", "bridge"]))))
+    (flags == ["classic"] or (flags != [] and Enum.uniq(flags) == flags and Enum.all?(flags, &(&1 in ["extended", "forests"]))))
   end
 
   def forests(variant, seed), do: forests(variant, seed, 10)
   def forests(variant, seed, size) do
     flags = String.split(variant, "+")
-    if "forests" in flags, do: forest_layout(seed, size, "bridge" in flags), else: []
+    if "forests" in flags, do: forest_layout(seed, size), else: []
   end
 
-  def forest_layout(seed, size, bridge \\ false) do
+  def forest_layout(seed, size) do
     opposite = size - 2
     anchors = for r <- 1..div(size - 1, 2), c <- 1..(size - 3),
       {r, c} < {opposite - r, opposite - c},
       abs(r - (opposite - r)) >= 2 or abs(c - (opposite - c)) >= 2,
-      not bridge or (div(size, 2) not in r..(r + 1) and div(size, 2) not in (opposite - r)..(opposite - r + 1)),
       do: {r, c}
     index = rem(:binary.decode_unsigned(:crypto.hash(:sha256, seed)), length(anchors))
     {row, col} = Enum.at(anchors, index)

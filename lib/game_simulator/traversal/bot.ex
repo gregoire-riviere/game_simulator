@@ -228,8 +228,7 @@ defmodule GameSimulator.Traversal.Bot do
           priority = if defender.strength < 2 do
             0
           else
-            # Apply the candidate first: only this state has the correct bridge
-            # phase and occupancy for the opponent's upcoming move.
+            # Apply the candidate first so occupancy matches the opponent's reply.
             next = Game.apply_action(game, move)
             Enum.reduce(runners, 0, fn runner, highest ->
               remaining_runner = Enum.find(Game.active(next), &(&1.id == runner.id))
@@ -363,41 +362,28 @@ defmodule GameSimulator.Traversal.Bot do
     end
   end
 
-  # Reverse Dijkstra ignores occupants. Keep both bridge states because the
-  # bridge can change while the same distance fields are reused during search.
-  def terrain(board, forests \\ [], game \\ nil) do
-    fields = terrain_fields(board, forests, game)
-    if game != nil and Game.bridge?(game) do
-      other = terrain_fields(board, forests, %{game | bridge_open: not game.bridge_open})
-      Map.put(fields, :bridge_fields, %{game.bridge_open => fields, (not game.bridge_open) => other})
-    else
-      fields
-    end
-  end
+  # Reverse Dijkstra ignores occupants; terrain and forest costs are static.
+  # Preserve the optional game argument for existing callers.
+  def terrain(board, forests \\ [], _game \\ nil), do: terrain_fields(board, forests)
 
-  def terrain_fields(board, forests, game) do
+  def terrain_fields(board, forests) do
     Map.new([1, 2], fn player ->
       frontier = for col <- 0..(length(board) - 1), do: {1, if(player == 1, do: 0, else: length(board) - 1), col}
       distances = Map.new(frontier, fn {cost, row, col} -> {{row, col}, cost} end)
-      {player, terrain_walk(board, frontier, distances, forests, game)}
+      {player, terrain_walk(board, frontier, distances, forests)}
     end)
   end
 
-  def terrain_for(game, terrain, player) do
-    case Map.get(terrain, :bridge_fields) do
-      nil -> Map.fetch!(terrain, player)
-      fields -> fields |> Map.fetch!(game.bridge_open) |> Map.fetch!(player)
-    end
-  end
+  def terrain_for(_game, terrain, player), do: Map.fetch!(terrain, player)
 
-  def terrain_walk(_board, [], distances, _forests, _game), do: distances
-  def terrain_walk(board, frontier, distances, forests, game) do
+  def terrain_walk(_board, [], distances, _forests), do: distances
+  def terrain_walk(board, frontier, distances, forests) do
     [{cost, row, col} | rest] = Enum.sort(frontier)
     if cost > Map.fetch!(distances, {row, col}) do
-      terrain_walk(board, rest, distances, forests, game)
+      terrain_walk(board, rest, distances, forests)
     else
       {frontier, distances} = Enum.reduce(Game.neighbours(row, col), {rest, distances}, fn {r, c}, {queue, known} ->
-        if Game.inside?(r, c, length(board)) and (game == nil or Game.crossing?(game, row, col, r, c)) do
+        if Game.inside?(r, c, length(board)) do
           next = cost + 1 + abs(Game.height(board, row, col) - Game.height(board, r, c)) +
             if(Enum.any?(forests, &(&1.row == row and &1.col == col)), do: 2, else: 0)
           if next < Map.get(known, {r, c}, 1_000), do: {[{next, r, c} | queue], Map.put(known, {r, c}, next)}, else: {queue, known}
@@ -405,7 +391,7 @@ defmodule GameSimulator.Traversal.Bot do
           {queue, known}
         end
       end)
-      terrain_walk(board, frontier, distances, forests, game)
+      terrain_walk(board, frontier, distances, forests)
     end
   end
 

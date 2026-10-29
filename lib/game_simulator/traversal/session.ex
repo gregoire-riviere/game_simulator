@@ -69,7 +69,7 @@ defmodule GameSimulator.Traversal.Session do
     entry = %{player: piece.player, piece: piece.id, from: [piece.row, piece.col],
       to: [move.row, move.col], kind: move.kind, special: move.special,
       cost: move.cost, captured: if(victim, do: victim.id, else: nil),
-      attack: Map.get(move, :attack), defence: Map.get(move, :defence), bridge_before: Map.get(state.game, :bridge_open), bridge_after: Map.get(game, :bridge_open)}
+      attack: Map.get(move, :attack), defence: Map.get(move, :defence)}
     entry = if analysis, do: Map.put(entry, :analysis, analysis), else: entry
     %{state | game: game, revision: state.revision + 1, log: state.log ++ [entry]}
   end

@@ -427,7 +427,7 @@ defmodule GameSimulator.Traversal.BotTest do
   end
 
   @tag timeout: 60_000
-  test "recorded extended bridge replay preserves legal tactical decisions" do
+  test "recorded extended forest replay preserves legal tactical decisions" do
     heights = "112233333222/222233333222/222333433222/223334443322/233344443333/333444443333/333344444333/333344443332/223344433322/222334333222/222333332222/222333332211"
       |> String.split("/")
       |> Enum.map(fn row -> row |> String.graphemes() |> Enum.map(&String.to_integer/1) end)
@@ -441,13 +441,12 @@ defmodule GameSimulator.Traversal.BotTest do
       {"1-0", "D8"}, {"2-6", "F8"}, {"1-0", "E9"}
     ]
     state = Enum.reduce(sequence,
-      %{Game.new(heights, "extended+forests+bridge", "1731283162") | forests: forests},
+      %{Game.new(heights, "extended+forests", "1731283162") | forests: forests},
       fn {id, square}, state ->
         move = move_to(state, id, square)
         Game.apply_action(state, move)
       end)
     assert state.moves == 11 and state.turn == 2
-    assert not state.bridge_open
     assert Enum.any?(Game.active(state), &(&1.id == "1-0" and &1.row == 8 and &1.col == 4))
     ranked = Bot.ranked(state, 2, Bot.terrain(state.board, forests, state))
     pool = Bot.strategic_candidates(state, ranked, Bot.limits("hard").width)

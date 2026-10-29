@@ -12,7 +12,7 @@ export function mountTraversal(page, api) {
   const reset = page.querySelector('#traversal-reset');
   const top = page.querySelector('#traversal-top');
   const difficulty = page.querySelector('#traversal-difficulty');
-  const options = ['extended', 'forests', 'bridge'].map(name => [name, page.querySelector('#traversal-' + name)]);
+  const options = ['extended', 'forests'].map(name => [name, page.querySelector('#traversal-' + name)]);
   const variantValue = () => options.filter(([, input]) => input.checked).map(([name]) => name).join('+') || 'classic';
   const selection = page.querySelector('#traversal-selection');
   const pieceOptions = page.querySelector('#traversal-pieces');
@@ -63,7 +63,6 @@ export function mountTraversal(page, api) {
       'TRAVERSAL replay v4',
       'Bot=' + state.difficulty + ' variant=' + game.variant + ' seed=' + JSON.stringify(state.seed),
       'Board=' + game.board.map(row => row.join('')).join('/'),
-      'Bridge=' + (game.variant.includes('bridge') ? ('river_row:' + (game.board.length / 2 + 1) + ',moving_col:' + String.fromCharCode(65 + game.board.length / 2 - 2) + ',fixed_col:' + String.fromCharCode(65 + game.board.length / 2 + 1) + ',open:' + game.bridge_open + ',phase:' + (game.moves % 4)) : 'none'),
       'Forests=' + (game.forests || []).map(p => coord([p.row, p.col])).sort().join(','),
       'Pieces=' + game.pieces.map(p => p.id + ':' + p.type[0].toUpperCase() + ':' + p.status[0] + ':' + coord([p.row, p.col])).join(','),
       'Moves=' + game.moves + ' turn=' + game.turn + ' scores=' + game.scores.join('-') +
@@ -76,7 +75,6 @@ export function mountTraversal(page, api) {
         ' ' + coord(m.from) + '>' + coord(m.to) + ' ' +
         ({move:'M',attack:'A',exit:'E'}[m.kind] || m.kind) +
         (m.special ? '*' : '') + ' c' + m.cost +
-        (game.variant.includes('bridge') ? ' bridge=' + m.bridge_before + '>' + m.bridge_after : '') +
         (m.captured ? ' x' + m.captured : '') +
         (m.attack == null ? '' : ' ' + m.attack + '/' + m.defence)
       );
@@ -166,8 +164,6 @@ export function mountTraversal(page, api) {
   const forestAt = (row, col) => (state?.game?.forests || []).some(cell => cell.row === row && cell.col === col);
   const tileTop = height => 0.24 + height * 0.28;
   const heightColors = [0xf6ecd2, 0xe4cf9e, 0xd2b47e, 0xbd9861, 0xa07a49, 0x805b34];
-  const riverAt = (row, size) => Boolean(state?.game?.variant.includes('bridge')) && row === size / 2;
-  const bridgeAt = (row, col, size) => riverAt(row, size) && (col === size / 2 + 1 || (col === size / 2 - 2 && state.game.bridge_open));
   function trees(x, z, height, center) {
     // Corner trees leave the central piece and destination ring visible.
     for (const [dx, dz] of [[-0.34, -0.34], [0.34, 0.34]]) {
@@ -193,34 +189,14 @@ export function mountTraversal(page, api) {
       for (let x = 0; x < size; x += 1) {
         const height = heights[z][x];
         const thickness = tileTop(height);
-        const river = riverAt(z, size);
-        const bridge = bridgeAt(z, x, size);
-        const color = river ? (bridge ? 0x987a52 : 0x2f91ac) : heightColors[height];
-        const tileHeight = river && !bridge ? 0.12 : thickness;
-        const tile = new THREE.Mesh(new THREE.BoxGeometry(0.96, tileHeight, 0.96), new THREE.MeshStandardMaterial({ color, roughness: 0.85 }));
-        tile.position.set(x - center, tileHeight / 2, z - center);
+        const tile = new THREE.Mesh(new THREE.BoxGeometry(0.96, thickness, 0.96), new THREE.MeshStandardMaterial({ color: heightColors[height], roughness: 0.85 }));
+        tile.position.set(x - center, thickness / 2, z - center);
         tile.userData = { row: z, col: x };
         targets.push(tile);
         terrain.add(tile);
-        if (!river || bridge) {
-          const edges = new THREE.LineSegments(new THREE.EdgesGeometry(tile.geometry), new THREE.LineBasicMaterial({ color: 0x6a5540, transparent: true, opacity: 0.45 }));
-          edges.raycast = () => {};
-          tile.add(edges);
-        }
-        if (bridge) {
-          for (const dx of [-0.43, 0.43]) {
-            const rail = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.16, 0.96), new THREE.MeshStandardMaterial({ color: 0x5a4839, roughness: 0.8 }));
-            rail.position.set(x - center + dx, thickness + 0.08, z - center);
-            terrain.add(rail);
-          }
-        } else if (river && x === size / 2 - 2) {
-          // Two folded halves make the closed movable bridge identifiable.
-          for (const dz of [-0.35, 0.35]) {
-            const folded = new THREE.Mesh(new THREE.BoxGeometry(0.82, 0.24, 0.16), new THREE.MeshStandardMaterial({ color: 0x8d4940, roughness: 0.8 }));
-            folded.position.set(x - center, 0.24, z - center + dz);
-            terrain.add(folded);
-          }
-        }
+        const edges = new THREE.LineSegments(new THREE.EdgesGeometry(tile.geometry), new THREE.LineBasicMaterial({ color: 0x6a5540, transparent: true, opacity: 0.45 }));
+        edges.raycast = () => {};
+        tile.add(edges);
         if (forestAt(z, x)) trees(x, z, thickness, center);
         const playerPiece = state?.game?.pieces.find(p => p.status === 'active' && p.row === z && p.col === x);
         if (playerPiece) {
@@ -280,10 +256,8 @@ export function mountTraversal(page, api) {
       tr.append(header);
       row.forEach((height, x) => {
         const td = document.createElement('td');
-        const river = riverAt(z, size), bridge = bridgeAt(z, x, size);
-        td.textContent = river && !bridge ? "Eau" : `${height}${bridge ? " P" : forestAt(z, x) ? " F" : ""}`;
-        if (river) td.setAttribute("aria-label", bridge ? `Hauteur ${height}, pont` : x === size / 2 - 2 ? "Rivière, pont fermé" : "Rivière, case inaccessible");
-        else if (forestAt(z, x)) td.setAttribute("aria-label", `Hauteur ${height}, forêt`);
+        td.textContent = `${height}${forestAt(z, x) ? " F" : ""}`;
+        if (forestAt(z, x)) td.setAttribute("aria-label", `Hauteur ${height}, forêt`);
         tr.append(td);
       });
       body.append(tr);
@@ -303,12 +277,8 @@ export function mountTraversal(page, api) {
     thinkingIndicator.hidden = !Boolean(state?.thinking && !result);
     const reasonNames = { first_sentinel: 'premier Sentinel sorti', two_exits: 'deux pièces sorties', no_active_pieces: 'un camp sans pièce active', move_limit_score: 'limite de 200 coups, score', move_limit_advancement: 'limite de 200 coups, progression puis force', threefold_repetition: 'répétition de séquence trois fois' };
     const difficulties = { easy: 'facile', medium: 'moyen', hard: 'difficile' };
-    const phase = game?.moves % 4;
-    const bridgeStatus = game?.variant.includes('bridge') ?
-      (game.bridge_open && phase >= 2 ? 'pont ouvert : fermeture dès libération' :
-        `pont ${game.bridge_open ? 'ouvert' : 'fermé'} · changement dans ${phase < 2 ? 2 - phase : 4 - phase} coup(s)`) : '';
     const outcome = result ? `${result.winner === 0 ? 'Match nul' : result.winner === 1 ? 'Vous avez gagné' : 'Le bot a gagné'} : ${reasonNames[result.reason]}.` : state?.blocked ? 'Aucun coup légal : partie bloquée. Vous pouvez lancer une nouvelle partie.' : busy || state?.thinking ? 'Le bot réfléchit…' : 'À vous de jouer — sélectionnez une pièce bleue.';
-    status.textContent = errorMessage + (game ? `${outcome} Score vous ${game.scores[0]} / bot ${game.scores[1]} · coup ${game.moves}/200 · bot ${difficulties[state.difficulty]} · ${game.variant}${bridgeStatus ? ` · ${bridgeStatus}` : ''}.` : 'Choisissez la difficulté et la variante, puis démarrez une nouvelle partie.');
+    status.textContent = errorMessage + (game ? `${outcome} Score vous ${game.scores[0]} / bot ${game.scores[1]} · coup ${game.moves}/200 · bot ${difficulties[state.difficulty]} · ${game.variant}.` : 'Choisissez la difficulté et la variante, puis démarrez une nouvelle partie.');
     const piece = game?.pieces.find(p => p.id === selected);
     selection.textContent = piece ? `${piece.type} · ${String.fromCharCode(65 + piece.col)}${piece.row + 1} · ${piece.movement} PM · force ${piece.strength}.` : '';
     pieceOptions.replaceChildren();

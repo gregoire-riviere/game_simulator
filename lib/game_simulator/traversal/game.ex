@@ -25,34 +25,7 @@ defmodule GameSimulator.Traversal.Game do
       col = if size == 12 and player == 2, do: size - 3 - index, else: index + 2
       Map.merge(stats(type), %{id: "#{player}-#{index}", type: type, player: player, row: if(player == 1, do: size - 1, else: 0), col: col, status: "active"})
     end
-    %{board: board, variant: variant, forests: GameSimulator.Traversal.Variant.forests(variant, seed, size), bridge_open: true, pieces: pieces, turn: 1, moves: 0, exited: [], scores: [0, 0], result: nil, history: []}
-  end
-
-  def bridge?(game), do: "bridge" in String.split(Map.get(game, :variant, "classic"), "+")
-  def crossing?(game, r, c, nr, nc, firing \\ false) do
-    size = length(game.board)
-    river = div(size, 2)
-    steps = max(abs(nr - r), abs(nc - c))
-    if not bridge?(game) or steps == 0 do
-      true
-    else
-      Enum.all?(0..steps, fn step ->
-        row = r + div((nr - r) * step, steps)
-        col = c + div((nc - c) * step, steps)
-        row != river or col == div(size, 2) + 1 or (col == div(size, 2) - 2 and (firing or game.bridge_open))
-      end)
-    end
-  end
-
-  def next_bridge(game) do
-    if bridge?(game) do
-      size = length(game.board)
-      mid = div(size, 2)
-      occupied = occupant(game, mid, mid - 2) != nil
-      %{game | bridge_open: rem(game.moves, 4) < 2 or occupied}
-    else
-      game
-    end
+    %{board: board, variant: variant, forests: GameSimulator.Traversal.Variant.forests(variant, seed, size), pieces: pieces, turn: 1, moves: 0, exited: [], scores: [0, 0], result: nil, history: []}
   end
 
   def forest?(game, row, col), do: Enum.any?(Map.get(game, :forests, []), &(&1.row == row and &1.col == col))
@@ -86,7 +59,7 @@ defmodule GameSimulator.Traversal.Game do
       walk(game, piece, rest, empty, enemies)
     else
       {next, empty, enemies} = Enum.reduce(neighbours(row, col), {rest, empty, enemies}, fn {r, c}, {q, cells, attacks} ->
-        if inside?(r, c, length(game.board)) and crossing?(game, row, col, r, c) do
+        if inside?(r, c, length(game.board)) do
           total = cost + 1 + abs(height(game.board, row, col) - height(game.board, r, c))
           target = occupant(game, r, c)
           cond do
@@ -143,7 +116,7 @@ defmodule GameSimulator.Traversal.Game do
           r = piece.row + dr * distance
           c = piece.col + dc * distance
           blocked = Enum.any?(1..(distance - 1), fn step -> occupant(game, piece.row + dr * step, piece.col + dc * step) != nil end)
-          if inside?(r, c, length(game.board)) and not blocked and crossing?(game, piece.row, piece.col, r, c, true) do
+          if inside?(r, c, length(game.board)) and not blocked do
             target = occupant(game, r, c)
             if target != nil and target.player != piece.player and height(game.board, r, c) <= height(game.board, piece.row, piece.col) do
               strength = combat(game, piece, target, distance)
@@ -167,7 +140,7 @@ defmodule GameSimulator.Traversal.Game do
       middle = {piece.row + div(dr, 2), piece.col + div(dc, 2)}
       blocked = jumping and (not inside?(elem(middle, 0), elem(middle, 1), length(game.board)) or occupant(game, elem(middle, 0), elem(middle, 1)) != nil)
       cond do
-        blocked or c < 0 or c >= length(game.board) or not crossing?(game, piece.row, piece.col, r, c) -> []
+        blocked or c < 0 or c >= length(game.board) -> []
         r == exit_row(piece.player, game) or (piece.player == 1 and r == -2) or (piece.player == 2 and r == length(game.board) + 1) -> [action(piece, exit_row(piece.player, game), c, piece.movement, "exit", true)]
         not inside?(r, c, length(game.board)) -> []
         true ->
@@ -205,7 +178,6 @@ defmodule GameSimulator.Traversal.Game do
     exited = if move.kind == "exit", do: game.exited ++ [piece.id], else: game.exited
     scores = for player <- [1, 2], do: pieces |> Enum.filter(&(&1.player == player and &1.status == "exited")) |> Enum.map(& &1.strength) |> Enum.sum()
     next = %{game | pieces: pieces, exited: exited, scores: scores, moves: game.moves + 1, turn: 3 - game.turn}
-    next = next_bridge(next)
     next = cond do
       move.kind == "exit" and game.exited == [] and piece.type == "sentinel" -> finish(next, piece.player, "first_sentinel")
       length(exited) >= 2 -> finish(next, score_winner(scores), "two_exits")
@@ -246,7 +218,7 @@ defmodule GameSimulator.Traversal.Game do
 
   def position(game) do
     pieces = active(game) |> Enum.map(&{&1.player, &1.type, &1.row, &1.col}) |> Enum.sort()
-    if bridge?(game), do: {game.turn, pieces, Enum.sort(game.exited), rem(game.moves, 4), game.bridge_open}, else: {game.turn, pieces, Enum.sort(game.exited)}
+    {game.turn, pieces, Enum.sort(game.exited)}
   end
 
   # Repeat a complete even-length sequence three times, as the official runtime does.
