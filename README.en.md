@@ -51,6 +51,8 @@ cd game_simulator
 mix deps.get
 cp .env.example .env
 mix install_minifiers
+npm ci
+npm run prepare:vendor
 mix compile_front
 mix run --no-halt
 ```
@@ -177,6 +179,8 @@ Build and start a release:
 
 ```sh
 MIX_ENV=prod mix deps.get
+npm ci
+npm run prepare:vendor
 MIX_ENV=prod mix compile_front
 MIX_ENV=prod mix release
 _build/prod/rel/game_simulator/bin/game_simulator start
@@ -229,6 +233,8 @@ server when enabled.
 ```sh
 mix deps.get
 mix test
+npm ci
+npm run prepare:vendor
 mix compile_front
 mix run --no-halt
 ```
@@ -299,7 +305,7 @@ cards are distinguished from hands mostly made by the board.
 from [`gregoire-riviere/html_handler`](https://github.com/gregoire-riviere/html_handler).
 
 The client is served by `HTMLHandler.Plug.OutputStatic` from `priv/static`. SSR
-is not enabled. Run `mix compile_front` after changing HTML, CSS, or JavaScript.
+is not enabled. Run `npm run prepare:vendor` then `mix compile_front` after changing HTML, CSS, or JavaScript.
 The generated `priv/static/` directory is not versioned.
 
 ### Security
@@ -314,3 +320,23 @@ sensitive values.
 The generic token API provided by `html_handler` is disabled: it accepts an
 arbitrary user identifier. Any future identity source must authenticate the user
 server-side, then call `GameSimulatorWeb.Auth.issue_token/1`.
+
+### Traversal against algorithmic bots
+
+Grant `traversal` permission (admins already have access), then open Traversal.
+Choose a seed and easy/medium/hard difficulty before starting a new temporary
+game. You play blue from row 10. Click a piece to see legal movement (blue),
+captures (red) and exits (green); equivalent buttons support keyboard play.
+Drag to orbit and scroll/pinch to zoom. The approved varied symmetric terrain
+generator is unchanged. Original solids follow the official one/two/three upper
+vertices: pentagonal pyramid, quadrilateral wedge, triangular prism.
+
+Elixir validates all moves, combat and outcomes. Bots use bounded algorithmic
+search, without LLMs. One session per authenticated user rejects stale or illegal
+actions. New games replace the temporary game; nothing is persisted.
+See [verified rules, edge cases, search budgets and tests](docs/traversal.md).
+
+Run `npm ci && npm run prepare:vendor && npm test`, then `mix test` and
+`mix install_minifiers && mix compile_front`. Three.js 0.170.0 remains the only
+added dependency, hosted locally. WebGL is required. Desktop/mobile visual
+validation is separate from CI and must be performed before visual sign-off.

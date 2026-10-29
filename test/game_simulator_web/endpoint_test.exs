@@ -77,8 +77,74 @@ defmodule GameSimulatorWeb.EndpointTest do
       |> then(&Endpoint.call(&1, Endpoint.init([])))
 
     assert response.status == 200
-    assert %{"user" => "test-user", "exp" => expiration, "permissions" => ["admin", "poker", "belote", "mr_white", "llm"]} = Poison.decode!(response.resp_body)
+    assert %{"user" => "test-user", "exp" => expiration, "permissions" => ["admin", "poker", "belote", "mr_white", "traversal", "llm"]} = Poison.decode!(response.resp_body)
     assert is_integer(expiration)
+  end
+
+  test "traversal requires a token and the current traversal permission" do
+    response = Endpoint.call(conn(:get, "/api/traversal"), Endpoint.init([]))
+    assert response.status == 401
+
+    assert :ok = Users.add("terrain-player", "a-long-test-password", ["poker"])
+    {:ok, token, _expiration} = Auth.issue_token("terrain-player")
+
+    request = fn ->
+      conn(:get, "/api/traversal")
+      |> put_req_header("authorization", "Bearer #{token}")
+      |> then(&Endpoint.call(&1, Endpoint.init([])))
+    end
+
+    assert request.().status == 403
+    assert :ok = Users.update("terrain-player", ["traversal"])
+    response = request.()
+    assert response.status == 200
+    assert %{"game" => nil} = Poison.decode!(response.resp_body)
+    assert :ok = Users.update("terrain-player", ["poker"])
+    assert request.().status == 403
+  end
+
+  test "traversal creation and move endpoints enforce current permission and user isolation" do
+    board = List.duplicate(List.duplicate(0, 10), 10)
+    for user <- ["traversal-api-a", "traversal-api-b"] do
+      assert :ok = Users.add(user, "a-long-test-password", ["traversal"])
+    end
+    {:ok, token_a, _} = Auth.issue_token("traversal-api-a")
+    {:ok, token_b, _} = Auth.issue_token("traversal-api-b")
+    request = fn path, body, token ->
+      conn(:post, path, Poison.encode!(body))
+      |> put_req_header("content-type", "application/json")
+      |> put_req_header("authorization", "Bearer #{token}")
+      |> then(&Endpoint.call(&1, Endpoint.init([])))
+    end
+    assert request.("/api/traversal", %{board: [[6]], difficulty: "easy"}, token_a).status == 422
+    for params <- [%{variant: "unknown", seed: "seed"}, %{variant: "forests"}, %{variant: "forests", seed: String.duplicate("s", 81)}] do
+      assert request.("/api/traversal", Map.merge(%{board: board, difficulty: "easy"}, params), token_a).status == 422
+    end
+    # Client-supplied arbitrary cells are never trusted: the server derives patches.
+    forest = request.("/api/traversal", %{board: board, difficulty: "easy", variant: "forests", seed: "api-seed", forests: [%{row: 0, col: 0}]}, token_a)
+    assert forest.status == 200
+    forest_data = Poison.decode!(forest.resp_body)
+    assert forest_data["game"]["variant"] == "forests"
+    expected = GameSimulator.Traversal.Variant.forests("forests", "api-seed") |> Poison.encode!() |> Poison.decode!()
+    assert forest_data["game"]["forests"] == expected
+    state = request.("/api/traversal", %{board: board, difficulty: "easy"}, token_a)
+    assert state.status == 200
+    data = Poison.decode!(state.resp_body)
+    assert data["game"]["variant"] == "classic"
+    assert data["game"]["forests"] == []
+    [move | _] = data["legal"]
+    params = Map.merge(move, %{"game_id" => data["game_id"], "revision" => data["revision"]})
+    assert request.("/api/traversal/move", params, token_b).status == 422
+    assert request.("/api/traversal/move", Map.put(params, "row", 90), token_a).status == 422
+    assert request.("/api/traversal/move", params, token_a).status == 200
+    assert request.("/api/traversal/move", params, token_a).status == 409
+    assert :ok = Users.update("traversal-api-a", ["poker"])
+    assert request.("/api/traversal/move", params, token_a).status == 403
+    assert request.("/api/traversal", %{board: board, difficulty: "easy"}, token_a).status == 403
+    for user <- ["traversal-api-a", "traversal-api-b"] do
+      {:ok, pid} = GameSimulator.Traversal.Session.server(user)
+      DynamicSupervisor.terminate_child(GameSimulator.TableSupervisor, pid)
+    end
   end
 
   test "changes the authenticated user's password" do
@@ -424,3 +490,4 @@ defmodule GameSimulatorWeb.EndpointTest do
 
   def wait_until(_fun, 0), do: false
 end
+

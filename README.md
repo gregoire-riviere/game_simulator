@@ -45,6 +45,7 @@ Le projet contient aujourd'hui :
 ### Prerequis
 
 - Elixir `~> 1.19` avec une version Erlang/OTP compatible.
+- Node.js 22+ et npm pour les modules Three.js du plateau Traversal.
 - `mix` et Hex (`mix local.hex` si necessaire).
 - Les outils de minification installes par `mix install_minifiers` pour compiler
   le client web.
@@ -57,6 +58,8 @@ cd game_simulator
 mix deps.get
 cp .env.example .env
 mix install_minifiers
+npm ci
+npm run prepare:vendor
 mix compile_front
 mix run --no-halt
 ```
@@ -76,7 +79,7 @@ mix run -e 'IO.inspect(GameSimulatorWeb.Users.add("admin", "a-long-unique-passwo
 ```
 
 Les utilisateurs sont stockes dans la table SQLite `users`. Les permissions
-valides sont `admin`, `poker`, `belote`, `mr_white` et `llm`; `admin` donne acces a tout. Si un ancien
+valides sont `admin`, `poker`, `belote`, `mr_white`, `traversal` et `llm`; `admin` donne acces a tout. Si un ancien
 fichier `GAME_SIMULATOR_USERS_FILE` existe au premier demarrage, ses comptes sont
 importes une fois comme admins.
 
@@ -160,6 +163,29 @@ optionnel : il ne peut choisir que parmi les actions légales et est limité à 
 décisions PNJ par match. En cas de quota atteint, d'erreur ou de délai d'attente,
 l'algorithme local reprend immédiatement la main.
 
+### Jouer à Traversal
+
+Avec la permission `traversal` (ou `admin`), ouvrez **Traversal**. Choisissez la
+difficulté du bot, une graine, puis **Nouvelle partie**. Vous jouez les bleus
+depuis la ligne 10. Cliquez une pièce pour afficher les déplacements bleus,
+captures rouges et sorties vertes ; les boutons sous le plateau proposent les
+mêmes actions au clavier. Glissez pour tourner, utilisez la molette/pincement
+pour zoomer ou les boutons vue dessus/reset. La difficulté s'applique à la
+prochaine partie ; celle-ci remplace la partie temporaire du compte.
+
+Le moteur Elixir est l'autorité sur les coups, combats, tours, sorties et fins.
+Les trois bots sont algorithmiques (aucun LLM) : choix immédiat, anticipation
+d'une réponse, recherche à trois demi-coups bornée. Les pièces suivent les
+silhouettes officielles : pyramide pentagonale, coin quadrilatère, prisme
+triangulaire. Le générateur varié et symétrique est conservé.
+
+Les [règles vérifiées, précisions, budgets et tests](docs/traversal.md) décrivent
+notamment le pouvoir Explorer, la charge Vanguard, les fins et le cas bloqué.
+Tests : `npm ci && npm run prepare:vendor && npm test`, puis `mix test` et
+`mix install_minifiers && mix compile_front`. Three.js `0.170.0`, seule dépendance
+ajoutée, est servi localement sans CDN. Le rendu nécessite WebGL. Une validation
+visuelle desktop/mobile reste distincte de la CI.
+
 ### Configurer l'application
 
 La configuration est resolue au demarrage, avec le meme comportement en `mix` et
@@ -235,6 +261,8 @@ Construire et demarrer une release :
 
 ```sh
 MIX_ENV=prod mix deps.get
+npm ci
+npm run prepare:vendor
 MIX_ENV=prod mix compile_front
 MIX_ENV=prod mix release
 _build/prod/rel/game_simulator/bin/game_simulator start
@@ -288,6 +316,8 @@ tables et, si active, le serveur HTTP.
 ```sh
 mix deps.get
 mix test
+npm ci
+npm run prepare:vendor
 mix compile_front
 mix run --no-halt
 ```
@@ -325,6 +355,9 @@ Les routes JSON disponibles sont :
 | `POST /api/admin/users` | Cree un utilisateur ; permission `admin` requise. |
 | `PUT /api/admin/users/:user` | Met a jour les permissions et reset optionnellement le mot de passe ; permission `admin` requise. |
 | `DELETE /api/admin/users/:user` | Supprime un utilisateur ; permission `admin` requise. |
+| `GET /api/traversal` | État de la partie temporaire, coups légaux et état du bot ; permission `traversal`. |
+| `POST /api/traversal` | Nouvelle partie contre bot `easy`, `medium` ou `hard` sur terrain validé. |
+| `POST /api/traversal/move` | Coup humain validé avec identifiant de partie et révision ; réponse du bot automatique. |
 | `POST /api/table` | Cree ou recupere la table temporaire de l'utilisateur. |
 | `GET /api/table` | Retourne l'etat de la table. |
 | `GET /api/table/extract?n=10` | Exporte les mains recentes en Markdown, de 1 a 50 mains ; permission `llm` requise. |
@@ -381,7 +414,7 @@ la décision déterministe.
 de [`gregoire-riviere/html_handler`](https://github.com/gregoire-riviere/html_handler).
 
 Le client est servi par `HTMLHandler.Plug.OutputStatic` depuis `priv/static/`.
-Le SSR n'est pas active. Relancez `mix compile_front` apres une modification
+Le SSR n'est pas active. Relancez `npm run prepare:vendor` puis `mix compile_front` apres une modification
 HTML, CSS ou JavaScript. Le dossier genere `priv/static/` n'est pas versionne.
 
 ### Securite
@@ -396,3 +429,4 @@ gestionnaire de secrets pour les valeurs sensibles.
 L'API generique de token fournie par `html_handler` est desactivee : elle accepte
 un identifiant arbitraire. Toute nouvelle source d'identite doit authentifier
 l'utilisateur cote serveur puis appeler `GameSimulatorWeb.Auth.issue_token/1`.
+

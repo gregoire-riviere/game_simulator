@@ -1,0 +1,9 @@
+{
+  "name": "game-simulator-web",
+  "private": true,
+  "scripts": {
+    "prepare:vendor": "node scripts/prepare_vendor.mjs",
+    "test": "node --test test/web/*.test.mjs"
+  },
+  "dependencies": {"three": "0.170.0"}
+}

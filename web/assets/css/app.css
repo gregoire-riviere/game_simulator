@@ -271,3 +271,46 @@ button:disabled { cursor: wait; opacity: .65; }
 .row-actions { display: flex; flex-wrap: wrap; gap: .45rem; }
 .row-actions button { padding: .5rem .65rem; border: 1px solid #ffffff29; border-radius: .5rem; color: #dbeafe; background: #0b1020cc; }
 .row-actions button:hover { border-color: #7dd3fc66; color: #f8fafc; }
+
+/* Prototype Traversal : le canvas garde son espace lors du redimensionnement. */
+.traversal-toolbar { margin-bottom: 1rem; padding: 1.15rem; border: 1px solid #ffffff1f; border-radius: .9rem; background: #151b2db3; }
+.traversal-toolbar form { gap: 1rem; }
+.traversal-fields { display: flex; flex-wrap: wrap; gap: .75rem; }
+.traversal-field { display: grid; flex: 1 1 13rem; gap: .4rem; min-width: 0; }
+.traversal-difficulty-field { flex: 0 1 12rem; }
+.traversal-field label, .traversal-variants legend { color: #aab4ca; font-size: .8rem; }
+.traversal-field input, .traversal-field select { width: 100%; min-height: 2.9rem; margin: 0; }
+.traversal-variants { min-width: 0; margin: 0; padding: 0; border: 0; }
+.traversal-variants legend { margin-bottom: .5rem; font-weight: 600; }
+.traversal-variant-options, .traversal-form-actions, .traversal-camera { display: flex; flex-wrap: wrap; gap: .6rem; }
+.traversal-variant-options label { display: inline-flex; align-items: center; gap: .55rem; min-height: 2.6rem; padding: .55rem .8rem; border: 1px solid #ffffff24; border-radius: .65rem; color: #dbeafe; background: #080c1859; cursor: pointer; }
+.traversal-variant-options label:has(input:checked) { border-color: #7dd3fc88; background: #16476480; }
+.traversal-variant-options input[type="checkbox"] { flex: none; width: 1rem; height: 1rem; min-height: 0; margin: 0; padding: 0; accent-color: #7dd3fc; }
+.traversal-variant-options input[type="checkbox"]:focus-visible { outline: 2px solid #7dd3fc; outline-offset: 3px; }
+.traversal-form-actions button { min-height: 2.9rem; padding-inline: 1rem; }
+.traversal-form-actions .traversal-start { color: #07111d; border-color: #7dd3fc; background: #7dd3fc; }
+.traversal-form-actions .traversal-start:hover { color: #07111d; border-color: #bae6fd; background: #bae6fd; }
+.traversal-camera { align-items: center; margin-bottom: .85rem; }
+@media (max-width: 36rem) { .traversal-difficulty-field { flex: 1 1 10rem; } }
+.traversal-canvas { position: relative; width: 100%; height: clamp(22rem, 61vh, 44rem); overflow: hidden; border: 1px solid #ffffff29; border-radius: 1rem; background: #101a2a; }
+.traversal-canvas canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+.traversal-thinking { position: absolute; top: .8rem; right: .8rem; display: flex; align-items: center; gap: .55rem; padding: .5rem .75rem; border: 1px solid #7dd3fc66; border-radius: 999px; color: #e0f2fe; background: #0b172be8; box-shadow: 0 3px 14px #02061766; font-size: .8rem; font-weight: 600; pointer-events: none; z-index: 2; }
+.traversal-thinking[hidden] { display: none; }
+.traversal-thinking-spinner { width: .85rem; height: .85rem; border: 2px solid #7dd3fc66; border-top-color: #bae6fd; border-radius: 50%; animation: traversal-spin .75s linear infinite; }
+@keyframes traversal-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .traversal-thinking-spinner { animation: none; border-top-color: #e0f2fe; } }
+.traversal-status { color: #a5f3fc; font-size: .9rem; }
+.traversal-help { color: #aab4ca; font-size: .85rem; line-height: 1.5; }
+.traversal-data { margin: 1.5rem 0; overflow: auto; color: #cbd5e1; }
+.traversal-data summary { cursor: pointer; }
+.traversal-data table { width: 100%; text-align: center; border-collapse: collapse; margin-top: 1rem; }
+.traversal-data td, .traversal-data th { padding: .5rem; border: 1px solid #ffffff29; }
+
+
+.traversal-options { display: flex; flex-wrap: wrap; gap: .5rem; margin: .7rem 0; }
+.traversal-options button, #traversal-difficulty { padding: .45rem .65rem; color: #e2e8f0; background: #18283d; border: 1px solid #64748b; border-radius: .4rem; }
+.traversal-options button[aria-pressed="true"] { outline: 2px solid #ffe166; }
+.traversal-options .traversal-move { border: 2px solid #7dd3fc; }
+.traversal-options .traversal-attack { border: 2px solid #fb7185; }
+.traversal-options .traversal-exit { border: 2px solid #86efac; }
+.traversal-options button:disabled { opacity: .55; cursor: wait; }

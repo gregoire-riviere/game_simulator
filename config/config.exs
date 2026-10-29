@@ -11,7 +11,7 @@ config :html_handler,
     html: "web",
     css: "web/assets/css",
     js: "web/assets/js",
-    dir_to_copy: ["web/assets/img"],
+    dir_to_copy: ["web/assets/img", "web/assets/vendor", "web/assets/traversal"],
     output: "priv/static"
   },
   templatization?: true,

@@ -8,3 +8,6 @@
 /.env
 /.env.test
 erl_crash.dump
+
+/node_modules/
+/web/assets/vendor/
